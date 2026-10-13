@@ -108,7 +108,7 @@ export function CreatorFilterMenu({
 
           {displayUsers.length === 0 && (
             <Text size="xs" c="dimmed" px="xs" py="sm">
-              {isLoading ? t("Loading...") : t("No users found")}
+              {isLoading ? t("Loading…") : t("No users found")}
             </Text>
           )}
 
