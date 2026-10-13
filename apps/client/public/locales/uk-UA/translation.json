@@ -1476,5 +1476,8 @@
   "Test event delivered to {{name}}": "Тестову подію доставлено до {{name}}",
   "Updated SIEM destination": "Оновлено призначення SIEM",
   "Verify TLS certificate": "Перевіряти сертифікат TLS",
-  "e.g. Splunk prod": "напр., Splunk prod"
+  "e.g. Splunk prod": "напр., Splunk prod",
+  "Login with SSO": "Увійти через SSO",
+  "or": "або",
+  "SSO is not configured on the server yet.": "SSO ще не налаштовано на сервері."
 }

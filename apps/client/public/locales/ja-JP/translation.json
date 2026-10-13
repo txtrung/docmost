@@ -1476,5 +1476,8 @@
   "Test event delivered to {{name}}": "テストイベントを {{name}} に配信しました",
   "Updated SIEM destination": "SIEM 宛先を更新しました",
   "Verify TLS certificate": "TLS 証明書を検証",
-  "e.g. Splunk prod": "例: Splunk 本番"
+  "e.g. Splunk prod": "例: Splunk 本番",
+  "Login with SSO": "SSOでログイン",
+  "or": "または",
+  "SSO is not configured on the server yet.": "SSOはサーバー側でまだ設定されていません。"
 }

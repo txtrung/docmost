@@ -1476,5 +1476,8 @@
   "Test event delivered to {{name}}": "Testgebeurtenis afgeleverd aan {{name}}",
   "Updated SIEM destination": "SIEM-bestemming bijgewerkt",
   "Verify TLS certificate": "TLS-certificaat verifiëren",
-  "e.g. Splunk prod": "bijv. Splunk prod"
+  "e.g. Splunk prod": "bijv. Splunk prod",
+  "Login with SSO": "Inloggen met SSO",
+  "or": "of",
+  "SSO is not configured on the server yet.": "SSO is nog niet geconfigureerd op de server."
 }

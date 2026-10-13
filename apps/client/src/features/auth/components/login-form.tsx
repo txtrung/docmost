@@ -18,6 +18,7 @@ import { Link } from "react-router-dom";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { useTranslation } from "react-i18next";
 import SsoLogin from "@/ee/components/sso-login.tsx";
+import { CustomSsoButton } from "@/plugins/custom-sso";
 import { useWorkspacePublicDataQuery } from "@/features/workspace/queries/workspace-query.ts";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import React from "react";
@@ -78,6 +79,8 @@ export function LoginForm() {
           </Title>
 
           <SsoLogin />
+
+          {!data?.enforceSso && <CustomSsoButton />}
 
           {!data?.enforceSso && (
             <>

@@ -1476,5 +1476,8 @@
   "Test event delivered to {{name}}": "Testereignis an {{name}} zugestellt",
   "Updated SIEM destination": "SIEM-Ziel aktualisiert",
   "Verify TLS certificate": "TLS-Zertifikat verifizieren",
-  "e.g. Splunk prod": "z. B. Splunk Prod"
+  "e.g. Splunk prod": "z. B. Splunk Prod",
+  "Login with SSO": "Mit SSO anmelden",
+  "or": "oder",
+  "SSO is not configured on the server yet.": "SSO ist auf dem Server noch nicht konfiguriert."
 }

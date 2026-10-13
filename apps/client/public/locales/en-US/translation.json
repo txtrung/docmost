@@ -1503,5 +1503,8 @@
   "Move right": "Move right",
   "Delete tab": "Delete tab",
   "Tab label": "Tab label",
-  "Tab actions for {{name}}": "Tab actions for {{name}}"
+  "Tab actions for {{name}}": "Tab actions for {{name}}",
+  "Login with SSO": "Login with SSO",
+  "or": "or",
+  "SSO is not configured on the server yet.": "SSO is not configured on the server yet."
 }

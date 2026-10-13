@@ -1476,5 +1476,8 @@
   "Test event delivered to {{name}}": "테스트 이벤트가 {{name}}에 전송되었습니다",
   "Updated SIEM destination": "SIEM 대상 업데이트됨",
   "Verify TLS certificate": "TLS 인증서 검증",
-  "e.g. Splunk prod": "예: Splunk 운영"
+  "e.g. Splunk prod": "예: Splunk 운영",
+  "Login with SSO": "SSO로 로그인",
+  "or": "또는",
+  "SSO is not configured on the server yet.": "서버에 SSO가 아직 구성되지 않았습니다."
 }

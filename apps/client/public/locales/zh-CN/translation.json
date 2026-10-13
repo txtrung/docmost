@@ -1476,5 +1476,8 @@
   "Test event delivered to {{name}}": "测试事件已发送到 {{name}}",
   "Updated SIEM destination": "已更新 SIEM 目标",
   "Verify TLS certificate": "验证 TLS 证书",
-  "e.g. Splunk prod": "例如：Splunk 生产环境"
+  "e.g. Splunk prod": "例如：Splunk 生产环境",
+  "Login with SSO": "使用 SSO 登录",
+  "or": "或",
+  "SSO is not configured on the server yet.": "服务器尚未配置 SSO。"
 }
