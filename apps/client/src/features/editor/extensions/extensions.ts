@@ -71,6 +71,8 @@ import {
   Tab,
   TabLabel,
   TabPanel,
+  PlaneTaskList,
+  TableOfContentsBlock,
 } from "@docmost/editor-ext";
 import {
   randomElement,
@@ -103,6 +105,8 @@ import TabsView from "@/features/editor/components/tabs/tabs-view.tsx";
 import TransclusionView from "@/features/editor/components/transclusion/transclusion-view.tsx";
 import TransclusionReferenceView from "@/features/editor/components/transclusion/transclusion-reference-view.tsx";
 import { BaseEmbedView } from "@/features/editor/components/base-embed/base-embed-view.tsx";
+import PlaneTaskListView from "@/features/editor/components/plane-task-list/plane-task-list-view.tsx";
+import TableOfContentsBlockView from "@/features/editor/components/table-of-contents-block/table-of-contents-block-view.tsx";
 import { common, createLowlight } from "lowlight";
 import plaintext from "highlight.js/lib/languages/plaintext";
 import powershell from "highlight.js/lib/languages/powershell";
@@ -395,6 +399,12 @@ export const mainExtensions = [
   PageBreak,
   Subpages.configure({
     view: SubpagesView,
+  }),
+  PlaneTaskList.configure({
+    view: PlaneTaskListView,
+  }),
+  TableOfContentsBlock.configure({
+    view: TableOfContentsBlockView,
   }),
   Status.configure({
     view: StatusView,

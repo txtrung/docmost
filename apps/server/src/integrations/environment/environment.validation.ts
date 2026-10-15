@@ -206,6 +206,23 @@ export class EnvironmentVariables {
     },
   )
   CLICKHOUSE_URL: string;
+
+  @IsOptional()
+  @ValidateIf((obj) => obj.PLANE_API_URL != '' && obj.PLANE_API_URL != null)
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false })
+  PLANE_API_URL: string;
+
+  @IsOptional()
+  @ValidateIf(
+    (obj) => obj.PLANE_WORKSPACE_SLUG != '' && obj.PLANE_WORKSPACE_SLUG != null,
+  )
+  @Matches(/^[A-Za-z0-9_-]{1,64}$/)
+  @IsString()
+  PLANE_WORKSPACE_SLUG: string;
+
+  @IsOptional()
+  @IsString()
+  PLANE_API_KEY: string;
 }
 
 export function validate(config: Record<string, any>) {

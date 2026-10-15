@@ -397,4 +397,16 @@ export class EnvironmentService {
   getAllowedPrivateNetworks(): string {
     return this.configService.get<string>('ALLOWED_PRIVATE_NETWORKS', 'none');
   }
+
+  getPlaneApiUrl(): string {
+    return this.configService.get<string>('PLANE_API_URL', '');
+  }
+
+  getPlaneWorkspaceSlug(): string {
+    return this.configService.get<string>('PLANE_WORKSPACE_SLUG', '');
+  }
+
+  getPlaneApiKey(): string {
+    return this.configService.get<string>('PLANE_API_KEY', '');
+  }
 }

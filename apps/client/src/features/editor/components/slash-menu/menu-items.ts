@@ -32,6 +32,9 @@ import {
   IconMoodSmile,
   IconRotate2,
   IconSuperscript,
+  IconChecklist,
+  IconTimeline,
+  IconListTree,
 } from "@tabler/icons-react";
 import {
   CommandProps,
@@ -62,6 +65,9 @@ import {
   YoutubeIcon,
 } from "@/components/icons";
 import { insertBaseEmbedBlock } from "@/features/editor/components/base-embed/insert-base-embed";
+import { createElement } from "react";
+import { modals } from "@mantine/modals";
+import PlaneRoadmapForm from "@/features/editor/components/plane-roadmap/plane-roadmap-form";
 
 const CommandGroups: SlashMenuGroupedItemsType = {
   basic: [
@@ -575,6 +581,45 @@ const CommandGroups: SlashMenuGroupedItemsType = {
       icon: IconSitemap,
       command: ({ editor, range }: CommandProps) => {
         editor.chain().focus().deleteRange(range).insertSubpages().run();
+      },
+    },
+    {
+      title: "Plane tasks",
+      description: "List work items from a Plane project.",
+      searchTerms: ["plane", "tasks", "issues", "work items"],
+      icon: IconChecklist,
+      command: ({ editor, range }: CommandProps) => {
+        editor.chain().focus().deleteRange(range).insertPlaneTaskList().run();
+      },
+    },
+    {
+      title: "Plane roadmap (Mermaid)",
+      description: "Insert a Mermaid Gantt chart from Plane.",
+      searchTerms: ["plane", "roadmap", "gantt", "mermaid", "timeline"],
+      icon: IconTimeline,
+      command: ({ editor, range }: CommandProps) => {
+        if (!editor) return;
+        editor.chain().focus().deleteRange(range).run();
+        const insertAt = editor.state.selection.from;
+        const modalId = "plane-roadmap";
+        modals.open({
+          modalId,
+          title: i18n.t("Plane roadmap (Mermaid)"),
+          children: createElement(PlaneRoadmapForm, {
+            editor,
+            insertAt,
+            onClose: () => modals.close(modalId),
+          }),
+        });
+      },
+    },
+    {
+      title: "Table of contents",
+      description: "Insert a table of contents for this page.",
+      searchTerms: ["toc", "contents", "outline", "headings"],
+      icon: IconListTree,
+      command: ({ editor, range }: CommandProps) => {
+        editor.chain().focus().deleteRange(range).insertTableOfContents().run();
       },
     },
     {
