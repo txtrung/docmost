@@ -14,8 +14,8 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         <img
           src={BRAND_LOGO_SRC}
           alt={BRAND_NAME}
-          width={22}
-          height={22}
+          width={48}
+          height={48}
         />
         <Text size="28px" fw={700} style={{ userSelect: "none" }}>
           {BRAND_NAME}

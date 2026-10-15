@@ -7,4 +7,4 @@
 export const BRAND_NAME = "FLI Document";
 
 /** Square mark used in the header (narrow screens) and on auth pages. */
-export const BRAND_LOGO_SRC = "/icons/favicon-32x32.png";
+export const BRAND_LOGO_SRC = "/icons/favicon-48x48.png";
