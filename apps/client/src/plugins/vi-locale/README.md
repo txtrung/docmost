@@ -6,7 +6,11 @@ This folder documents the Vietnamese UI locale. The catalog itself lives with th
 
 The client uses `i18next` and `react-i18next` (`apps/client/src/i18n.ts`). Strings are loaded over HTTP from `apps/client/public/locales/{{lng}}/translation.json`. The fallback language is `en-US`. `crowdin.yml` already maps every locale with `%locale%`, so it does not need a Vietnamese-specific entry.
 
-After sign-in, `UserProvider` calls `i18n.changeLanguage` with the user's `locale`. The account settings picker is `AccountLanguage` in `apps/client/src/features/user/components/account-language.tsx`. Choosing **Tiếng Việt** stores `vi-VN`.
+After sign-in, `UserProvider` calls `i18n.changeLanguage` with the user's `locale`. The account settings picker is `AccountLanguage` in `apps/client/src/features/user/components/account-language.tsx`. Choosing **Tiếng Việt** stores `vi-VN`. That account locale still wins over the browser.
+
+Before sign-in, `i18n.ts` calls `resolvePreAuthLocale()` in this folder. It uses the last locale saved in `localStorage` (`docmost.locale`), then `navigator.language` when that tag is a supported locale (`vi` and `vi-VN` both select Tiếng Việt), then `en-US`. `languageChanged` writes the active locale back to storage, so the login page matches the account language after logout.
+
+API errors go through `getApiErrorMessage` (`apps/client/src/lib/api-error.ts`), which calls `translateApiErrorMessage` in this folder. The English server sentence is the i18n key. A missing key leaves the original message. Auth screens (login, forgot and reset password, invite, setup) show errors through that helper.
 
 There is no dayjs usage. Dates and relative times in community code go through `date-fns` in `apps/client/src/lib/date-locale.ts` and `apps/client/src/lib/time.ts`. `vi-VN` is mapped to the `vi` locale from `date-fns/locale`. `Intl` formatters already follow `i18n.language`.
 
@@ -19,6 +23,9 @@ These are the only core edits, kept small so they merge cleanly when upstream ad
 3. `account-language.tsx` — one picker row: `{ value: "vi-VN", label: "Tiếng Việt" }`.
 4. `date-locale.ts` — import `vi` and map `"vi-VN"` to it.
 5. A handful of community components that still had visible English now call `t()` (slash-menu category, status badge, base embed messages, toolbar label, theme toggle, attachment download, find-in-page controls, embed menu labels).
+6. `i18n.ts` — initial language from `resolvePreAuthLocale()`, and a `languageChanged` listener that remembers it.
+7. `api-error.ts` — translates the server message before it is returned.
+8. `use-auth.ts` — login, invite, setup, forgot password, and reset password notifications use `getApiErrorMessage`.
 
 Nothing under `apps/client/src/ee`, `apps/server/src/ee`, or `packages/ee` was modified. Enterprise screens pick up Vietnamese only when they call `t()` with a key that exists in the shared catalog.
 

@@ -27,6 +27,7 @@ import APP_ROUTE, { getPostLoginRedirect } from "@/lib/app-route.ts";
 import { RESET } from "jotai/utils";
 import { useTranslation } from "react-i18next";
 import { isCloud } from "@/lib/config.ts";
+import { getApiErrorMessage } from "@/lib/api-error.ts";
 import { exchangeTokenRedirectUrl, getHostnameUrl } from "@/ee/utils.ts";
 
 export default function useAuth() {
@@ -63,7 +64,7 @@ export default function useAuth() {
       }
 
       notifications.show({
-        message,
+        message: getApiErrorMessage(err),
         color: "red",
       });
     }
@@ -89,7 +90,7 @@ export default function useAuth() {
     } catch (err) {
       setIsLoading(false);
       notifications.show({
-        message: err.response?.data.message,
+        message: getApiErrorMessage(err),
         color: "red",
       });
     }
@@ -128,7 +129,7 @@ export default function useAuth() {
     } catch (err) {
       setIsLoading(false);
       notifications.show({
-        message: err.response?.data.message,
+        message: getApiErrorMessage(err),
         color: "red",
       });
     }
@@ -157,7 +158,7 @@ export default function useAuth() {
     } catch (err) {
       setIsLoading(false);
       notifications.show({
-        message: err.response?.data.message,
+        message: getApiErrorMessage(err),
         color: "red",
       });
     }
@@ -181,7 +182,7 @@ export default function useAuth() {
       console.log(err);
       setIsLoading(false);
       notifications.show({
-        message: err.response?.data.message,
+        message: getApiErrorMessage(err),
         color: "red",
       });
 
@@ -199,7 +200,7 @@ export default function useAuth() {
       console.log(err);
       setIsLoading(false);
       notifications.show({
-        message: err.response?.data.message,
+        message: getApiErrorMessage(err),
         color: "red",
       });
     }
