@@ -4,8 +4,8 @@ Use these terms everywhere in `apps/client/public/locales/vi-VN/translation.json
 
 | English | Tiếng Việt | Notes |
 | --- | --- | --- |
-| Workspace | Không gian làm việc | The whole Docmost organization |
-| Space | Không gian | A Docmost space. Not the space character |
+| Workspace | Không gian làm việc | The whole organization |
+| Space | Không gian | A space. Not the space character |
 | Page | Trang | |
 | Comment | Bình luận | |
 | Share | Chia sẻ | |
@@ -59,6 +59,8 @@ Use these terms everywhere in `apps/client/public/locales/vi-VN/translation.json
 
 ## Kept in English
 
-These stay as product, protocol, or format names: Docmost, Base, Slug, Markdown, PDF, CSV, API, OAuth, SSO, MFA, LDAP, SCIM, MCP, SIEM, Kanban, and third-party product names (YouTube, Figma, Draw.io, Excalidraw, and similar).
+The product name is **FLI Document** in every language. It is not translated.
+
+These stay as product, protocol, or format names: Base, Slug, Markdown, PDF, CSV, API, OAuth, SSO, MFA, LDAP, SCIM, MCP, SIEM, Kanban, and third-party product names (YouTube, Figma, Draw.io, Excalidraw, and similar). The address `sales@docmost.com` stays as written.
 
 "Space" as a whitespace character is "dấu cách", not "Không gian".
