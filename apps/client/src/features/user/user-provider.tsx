@@ -13,6 +13,11 @@ import { useCollabToken } from "@/features/auth/queries/auth-query.tsx";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import { useEntitlements } from "@/ee/entitlement/use-entitlements";
 import { entitlementAtom } from "@/ee/entitlement/entitlement-atom";
+import { updateUser } from "@/features/user/services/user-service.ts";
+import {
+  clearExplicitLocale,
+  readExplicitLocale,
+} from "@/plugins/vi-locale/pre-auth-locale.ts";
 
 export function UserProvider({ children }: React.PropsWithChildren) {
   const [, setCurrentUser] = useAtom(currentUserAtom);
@@ -54,9 +59,23 @@ export function UserProvider({ children }: React.PropsWithChildren) {
   useEffect(() => {
     if (data && data.user && data.workspace) {
       setCurrentUser(data);
-      i18n.changeLanguage(
-        data.user.locale === "en" ? "en-US" : data.user.locale,
-      );
+      const accountLocale =
+        data.user.locale === "en" ? "en-US" : data.user.locale;
+      const explicit = readExplicitLocale();
+      if (explicit && explicit !== accountLocale) {
+        i18n.changeLanguage(explicit);
+        void updateUser({ locale: explicit })
+          .then((user) => {
+            clearExplicitLocale();
+            setCurrentUser({ ...data, user });
+          })
+          .catch(() => {
+            // Keep the explicit flag so a later signed-in load can retry.
+          });
+        return;
+      }
+      clearExplicitLocale();
+      i18n.changeLanguage(accountLocale);
     }
   }, [data, isLoading]);
 

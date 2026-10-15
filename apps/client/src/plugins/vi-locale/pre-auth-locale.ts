@@ -1,27 +1,14 @@
 /**
  * Locale used before a user is signed in.
- * Account locale still wins after login: UserProvider calls i18n.changeLanguage,
- * and the languageChanged listener below stores that choice for the next visit.
+ * Browser detection is stored in `docmost.locale` and still loses to the
+ * account locale after login. An explicit picker choice also sets
+ * `docmost.locale.explicit`; UserProvider then saves that locale on the account.
  */
 
-const STORAGE_KEY = "docmost.locale";
+import { SUPPORTED_LOCALES } from "@/plugins/vi-locale/locale-options.ts";
 
-/** Same codes as the account language picker. */
-const SUPPORTED_LOCALES = [
-  "en-US",
-  "es-ES",
-  "de-DE",
-  "fr-FR",
-  "nl-NL",
-  "pt-BR",
-  "it-IT",
-  "ja-JP",
-  "ko-KR",
-  "uk-UA",
-  "ru-RU",
-  "zh-CN",
-  "vi-VN",
-] as const;
+const STORAGE_KEY = "docmost.locale";
+const EXPLICIT_KEY = "docmost.locale.explicit";
 
 const DEFAULT_LOCALE = "en-US";
 
@@ -58,6 +45,33 @@ export function rememberLocale(locale: string) {
   }
   if (typeof document !== "undefined") {
     document.documentElement.lang = normalized;
+  }
+}
+
+/** Picker choice. Survives login until UserProvider syncs it to the account. */
+export function selectPreAuthLocale(locale: string) {
+  rememberLocale(locale);
+  try {
+    localStorage.setItem(EXPLICIT_KEY, "1");
+  } catch {
+    // Ignore unreadable storage. The in-memory language change still applies.
+  }
+}
+
+export function readExplicitLocale(): string | null {
+  try {
+    if (localStorage.getItem(EXPLICIT_KEY) !== "1") return null;
+    return canonicalLocale(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+export function clearExplicitLocale() {
+  try {
+    localStorage.removeItem(EXPLICIT_KEY);
+  } catch {
+    // Ignore storage failures.
   }
 }
 
