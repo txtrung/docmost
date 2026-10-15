@@ -112,19 +112,19 @@ export function BaseEmbedView({ node, editor, deleteNode }: NodeViewProps) {
   } else if (!pageId) {
     content = (
       <Box p="md">
-        <Text c="red">Invalid base embed (missing page id)</Text>
+        <Text c="red">{t("Invalid base embed (missing page id)")}</Text>
       </Box>
     );
   } else if (isLoading) {
     content = (
       <Box p="md">
-        <Text c="dimmed">Loading...</Text>
+        <Text c="dimmed">{t("Loading…")}</Text>
       </Box>
     );
   } else if (isError) {
     content = (
       <Box p="md" bg="gray.0" style={{ borderRadius: 8 }}>
-        <Text c="dimmed">You don't have access to this base.</Text>
+        <Text c="dimmed">{t("You don't have access to this base.")}</Text>
       </Box>
     );
   } else {
@@ -171,7 +171,7 @@ export function BaseEmbedView({ node, editor, deleteNode }: NodeViewProps) {
       )}
       <div data-drag-preview hidden className={classes.dragPreview}>
         <IconTable size={16} />
-        <span>{page?.title?.trim() || "Untitled base"}</span>
+        <span>{page?.title?.trim() || t("Untitled base")}</span>
       </div>
       <div ref={wrapperRef} style={{ minHeight: isCompact ? undefined : 200 }}>
         {content}

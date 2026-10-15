@@ -4,11 +4,13 @@ import {
   Container,
   Head,
   Html,
+  Img,
   Row,
   Section,
   Text,
 } from 'react-email';
 import * as React from 'react';
+import { BRAND_EMAIL_LOGO_SRC, BRAND_NAME } from '../../../common/brand';
 
 interface MailBodyProps {
   children: React.ReactNode;
@@ -29,8 +31,17 @@ export function MailBody({ children }: MailBodyProps) {
 
 export function MailHeader() {
   return (
-    <Section style={logo}>
-      {/* <Heading style={h1}>docmost</Heading> */}
+    <Section style={{ ...logo, textAlign: 'center' as const }}>
+      <Img
+        src={BRAND_EMAIL_LOGO_SRC}
+        width="32"
+        height="32"
+        alt={BRAND_NAME}
+        style={{ margin: '8px auto' }}
+      />
+      <Text style={{ ...h1, textAlign: 'center' as const, margin: '0 0 8px' }}>
+        {BRAND_NAME}
+      </Text>
     </Section>
   );
 }
@@ -81,7 +92,7 @@ export function MailFooter() {
     <Section style={footer}>
       <Row>
         <Text style={{ textAlign: 'center', color: '#706a7b' }}>
-          © {new Date().getFullYear()} Docmost, All Rights Reserved <br />
+          © {new Date().getFullYear()} {BRAND_NAME}, All Rights Reserved <br />
         </Text>
       </Row>
     </Section>

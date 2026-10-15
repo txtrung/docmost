@@ -2,6 +2,7 @@ import { Section, Text } from 'react-email';
 import * as React from 'react';
 import { content, paragraph } from '../css/styles';
 import { EmailButton, MailBody } from '../partials/partials';
+import { BRAND_NAME } from '../../../common/brand';
 
 type Props = {
   destinationName: string;
@@ -23,13 +24,13 @@ export const SiemDestinationFailingEmail = ({
       <Section style={content}>
         <Text style={paragraph}>Hi there,</Text>
         <Text style={paragraph}>
-          Docmost cannot deliver audit events to your SIEM destination{' '}
+          {BRAND_NAME} cannot deliver audit events to your SIEM destination{' '}
           <strong>{destinationName}</strong> ({destinationType}).
         </Text>
         <Text style={paragraph}>Last error: {lastError}</Text>
         <Text style={paragraph}>Failing since {failingSince}.</Text>
         <Text style={paragraph}>
-          Docmost keeps retrying every 30 minutes. If the destination is still
+          {BRAND_NAME} keeps retrying every 30 minutes. If the destination is still
           failing 24 hours after it started, it is disabled automatically.
         </Text>
       </Section>

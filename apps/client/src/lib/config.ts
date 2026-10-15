@@ -2,6 +2,7 @@ import bytes from "bytes";
 import { castToBoolean } from "@/lib/utils.tsx";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
 import { sanitizeUrl } from "@docmost/editor-ext";
+import { BRAND_NAME } from "@/plugins/branding/brand.ts";
 
 declare global {
   interface Window {
@@ -10,7 +11,7 @@ declare global {
 }
 
 export function getAppName(): string {
-  return "Docmost";
+  return BRAND_NAME;
 }
 
 export function getAppUrl(): string {

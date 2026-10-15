@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import ms, { StringValue } from 'ms';
+import { BRAND_NAME } from '../../common/brand';
 
 @Injectable()
 export class EnvironmentService {
@@ -151,7 +152,7 @@ export class EnvironmentService {
   }
 
   getMailFromName(): string {
-    return this.configService.get<string>('MAIL_FROM_NAME', 'Docmost');
+    return this.configService.get<string>('MAIL_FROM_NAME', BRAND_NAME);
   }
 
   getMailBlockedRecipientDomains(): string[] {

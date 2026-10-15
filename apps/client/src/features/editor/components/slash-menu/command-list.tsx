@@ -145,10 +145,14 @@ const CommandList = ({
       >
         {(() => {
           let flatIndex = -1;
-          return Object.entries(items).map(([category, categoryItems]) => (
-          <div key={category} role="group" aria-label={category}>
+          return Object.entries(items).map(([category, categoryItems]) => {
+          const categoryLabel = t(
+            category.charAt(0).toUpperCase() + category.slice(1),
+          );
+          return (
+          <div key={category} role="group" aria-label={categoryLabel}>
             <Text c="dimmed" mb={4} fw={500} tt="capitalize">
-              {category}
+              {categoryLabel}
             </Text>
             {categoryItems.map((item: SlashMenuItemType) => {
               flatIndex += 1;
@@ -199,7 +203,8 @@ const CommandList = ({
               );
             })}
           </div>
-          ));
+          );
+          });
         })()}
       </ScrollArea>
     </Paper>

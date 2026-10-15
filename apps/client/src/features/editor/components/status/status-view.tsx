@@ -4,6 +4,7 @@ import { Popover, TextInput, Group, Box } from "@mantine/core";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { IconCheck } from "@tabler/icons-react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 import classes from "./status.module.css";
 import type { StatusColor } from "@docmost/editor-ext";
 
@@ -26,6 +27,7 @@ const colorClassMap: Record<StatusColor, string> = {
 };
 
 export default function StatusView(props: NodeViewProps) {
+  const { t } = useTranslation();
   const { node, updateAttributes, deleteNode, editor, getPos } = props;
   const { text, color } = node.attrs as {
     text: string;
@@ -100,11 +102,11 @@ export default function StatusView(props: NodeViewProps) {
             }}
             role="button"
             tabIndex={0}
-            aria-label={text || "SET STATUS"}
+            aria-label={text || t("SET STATUS")}
             aria-haspopup="dialog"
             aria-expanded={opened}
           >
-            {text || "SET STATUS"}
+            {text || t("SET STATUS")}
           </span>
         </Popover.Target>
 
@@ -121,7 +123,7 @@ export default function StatusView(props: NodeViewProps) {
                 editor.commands.focus(getPos() + node.nodeSize);
               }
             }}
-            placeholder="Status text"
+            placeholder={t("Status text")}
             size="sm"
             mb="xs"
           />

@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import styles from "./docs.module.css";
+import { BRAND_NAME } from "@/plugins/branding/brand.ts";
 
 export default function DocsFooterBranding({
   className,
@@ -16,7 +17,7 @@ export default function DocsFooterBranding({
         target="_blank"
         rel="noreferrer"
       >
-        Powered by Docmost
+        Powered by {BRAND_NAME}
       </a>
     </footer>
   );

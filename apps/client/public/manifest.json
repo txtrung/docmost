@@ -1,6 +1,6 @@
 {
-  "name": "Docmost",
-  "short_name": "Docmost",
+  "name": "FLI Document",
+  "short_name": "FLI Document",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#222",
@@ -17,9 +17,14 @@
       "sizes": "32x32"
     },
     {
+      "src": "icons/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180"
+    },
+    {
       "src": "icons/app-icon-192x192.png",
       "type": "image/png",
-      "sizes": "180x180 192x192"
+      "sizes": "192x192"
     },
     {
       "src": "icons/app-icon-512x512.png",

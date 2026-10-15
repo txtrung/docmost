@@ -11,6 +11,7 @@ import { usePublicSpaceDirectoryQuery } from "@/features/public-space/queries/pu
 import { useAuthenticatedUser } from "@/features/public-space/hooks/use-authenticated-user.ts";
 import { buildPublicSpaceUrl } from "@/features/page/page.utils.ts";
 import { getAvatarUrl } from "@/lib/config.ts";
+import { BRAND_NAME } from "@/plugins/branding/brand.ts";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import { DocumentTitle } from "@/components/ui/document-title.tsx";
 import { MAIN_CONTENT_ID, SkipToMain } from "@/components/ui/skip-to-main.tsx";
@@ -224,7 +225,7 @@ export default function PublicSpaceDirectoryPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Docmost
+                {BRAND_NAME}
               </a>
             </div>
           </div>

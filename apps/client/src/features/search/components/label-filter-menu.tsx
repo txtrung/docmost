@@ -87,7 +87,7 @@ export function LabelFilterMenu({
         <ScrollArea.Autosize mah={280}>
           {labels.length === 0 && (
             <Text size="xs" c="dimmed" px="xs" py="sm">
-              {isLoading ? t("Loading...") : t("No labels found")}
+              {isLoading ? t("Loading…") : t("No labels found")}
             </Text>
           )}
 

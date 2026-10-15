@@ -19,6 +19,7 @@ import {
   WorkspaceInvitation,
 } from '@docmost/db/types/entity.types';
 import { MailService } from '../../../integrations/mail/mail.service';
+import { BRAND_NAME } from '../../../common/brand';
 import InvitationEmail from '@docmost/transactional/emails/invitation-email';
 import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
 import InvitationAcceptedEmail from '@docmost/transactional/emails/invitation-accepted-email';
@@ -328,7 +329,7 @@ export class WorkspaceInvitationService {
 
       await this.mailService.sendToQueue({
         to: invitedByUser.email,
-        subject: `${newUser.name} has accepted your Docmost invite`,
+        subject: `${newUser.name} has accepted your ${BRAND_NAME} invite`,
         template: emailTemplate,
       });
     }
@@ -477,7 +478,7 @@ export class WorkspaceInvitationService {
 
     await this.mailService.sendToQueue({
       to: inviteeEmail,
-      subject: `${invitedByName} invited you to Docmost`,
+      subject: `${invitedByName} invited you to ${BRAND_NAME}`,
       template: emailTemplate,
     });
   }
