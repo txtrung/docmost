@@ -345,11 +345,13 @@ export function zoomForSpan(start: string, end: string): RoadmapZoom {
 
 export function packRoadmapRows(
   laneIds: string[],
-  bars: { id: string; laneId: string; start: string; end: string }[],
+  bars: { id: string; laneId: string; start: string; end: string; labelPx?: number }[],
+  dayPx = 1,
 ): {
   lanes: { id: string; rowStart: number; rowCount: number }[];
   bars: { id: string; row: number; laneRow: number }[];
 } {
+  void dayPx;
   const lanes: { id: string; rowStart: number; rowCount: number }[] = [];
   const placed: { id: string; row: number; laneRow: number }[] = [];
   let cursor = 0;

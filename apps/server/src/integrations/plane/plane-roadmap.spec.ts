@@ -322,4 +322,21 @@ describe('packRoadmapRows', () => {
     expect(laneA?.rowCount).toBe(2);
     expect(b1?.row).toBe((laneA?.rowStart ?? 0) + (laneA?.rowCount ?? 0));
   });
+
+  it('puts a bar on the next row when the previous label still covers its start', () => {
+    const packed = packRoadmapRows(
+      ['lane-a'],
+      [
+        { id: 'a1', laneId: 'lane-a', start: '2026-10-15', end: '2026-10-15', labelPx: 180 },
+        { id: 'a2', laneId: 'lane-a', start: '2026-10-17', end: '2026-10-17', labelPx: 180 },
+        { id: 'a3', laneId: 'lane-a', start: '2026-11-03', end: '2026-11-05', labelPx: 0 },
+      ],
+      36,
+    );
+    const a1 = packed.bars.find((bar) => bar.id === 'a1');
+    const a2 = packed.bars.find((bar) => bar.id === 'a2');
+    const a3 = packed.bars.find((bar) => bar.id === 'a3');
+    expect(a1 && a2 && a1.laneRow !== a2.laneRow).toBe(true);
+    expect(a3?.laneRow).toBe(a1?.laneRow);
+  });
 });
