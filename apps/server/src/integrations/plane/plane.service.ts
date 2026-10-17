@@ -23,6 +23,8 @@ import {
   WorkItemCollection,
   detectWorkItemCollection,
   joinPlaneUrl,
+  logPlaneDebug,
+  planeDebugEnabled,
   planeListAll,
   planeRequest,
 } from './plane-http';
@@ -357,10 +359,7 @@ export class PlaneService {
   }
 
   private async cachedProjects(config: PlaneConfig): Promise<PlaneProject[]> {
-    return withCache(
-      this.cacheManager,
-      this.cacheKey(config, ['projects']),
-      PLANE_CACHE_TTL_MS,
+    return this.cached(config, ['projects'], PLANE_CACHE_TTL_MS,
       async () => {
         const url = joinPlaneUrl(
           config.baseUrl,
@@ -378,10 +377,7 @@ export class PlaneService {
     config: PlaneConfig,
     projectId: string,
   ): Promise<PlanePerson[]> {
-    return withCache(
-      this.cacheManager,
-      this.cacheKey(config, ['members', projectId]),
-      PLANE_CACHE_TTL_MS,
+    return this.cached(config, ['members', projectId], PLANE_CACHE_TTL_MS,
       async () => {
         const url = joinPlaneUrl(
           config.baseUrl,
@@ -404,11 +400,7 @@ export class PlaneService {
     const identifier =
       projects.find((project) => project.id === projectId)?.identifier ?? '';
 
-    return withCache(
-      this.cacheManager,
-      this.cacheKey(config, [collection, projectId]),
-      PLANE_CACHE_TTL_MS,
-      async () => {
+    return this.cached(config, [collection, projectId], PLANE_CACHE_TTL_MS, async () => {
         const url = joinPlaneUrl(
           config.baseUrl,
           `workspaces/${config.slug}/projects/${projectId}/${collection}/?per_page=${PLANE_PAGE_SIZE}&expand=assignees,state,labels`,
@@ -434,11 +426,7 @@ export class PlaneService {
     collection: string,
     normalize: (value: unknown) => T | null,
   ): Promise<T[]> {
-    return withCache(
-      this.cacheManager,
-      this.cacheKey(config, [collection, projectId]),
-      PLANE_CACHE_TTL_MS,
-      async () => {
+    return this.cached(config, [collection, projectId], PLANE_CACHE_TTL_MS, async () => {
         const url = joinPlaneUrl(
           config.baseUrl,
           `workspaces/${config.slug}/projects/${projectId}/${collection}/?per_page=${PLANE_PAGE_SIZE}`,
@@ -459,6 +447,7 @@ export class PlaneService {
     try {
       const cached = await this.cacheManager.get<{ v: WorkItemCollection }>(key);
       if (cached?.v === 'work-items' || cached?.v === 'issues') {
+        logPlaneDebug(`cache hit collection ${cached.v}`);
         return cached.v;
       }
     } catch (error) {
@@ -510,10 +499,7 @@ export class PlaneService {
     config: PlaneConfig,
     projectId: string,
   ): Promise<ModuleMembership> {
-    return withCache(
-      this.cacheManager,
-      this.cacheKey(config, ['membership-modules', projectId]),
-      PLANE_CACHE_TTL_MS,
+    return this.cached(config, ['membership-modules', projectId], PLANE_CACHE_TTL_MS,
       async () => {
         const modules = await this.cachedCollection(
           config,
@@ -546,10 +532,7 @@ export class PlaneService {
     config: PlaneConfig,
     projectId: string,
   ): Promise<CycleMembership> {
-    return withCache(
-      this.cacheManager,
-      this.cacheKey(config, ['membership-cycles', projectId]),
-      PLANE_CACHE_TTL_MS,
+    return this.cached(config, ['membership-cycles', projectId], PLANE_CACHE_TTL_MS,
       async () => {
         const cycles = await this.cachedCollection(
           config,
@@ -681,6 +664,24 @@ export class PlaneService {
         this.logger.warn(`Plane cache delete failed: ${error}`);
       }
     }
+  }
+
+  private async cached<T>(
+    config: PlaneConfig,
+    parts: string[],
+    ttlMs: number,
+    load: () => Promise<T>,
+  ): Promise<T> {
+    const key = this.cacheKey(config, parts);
+    if (planeDebugEnabled()) {
+      try {
+        const hit = await this.cacheManager.get(key);
+        if (hit != null) logPlaneDebug(`cache hit ${parts.join(' ')}`);
+      } catch {
+        // A failed peek still falls through to withCache.
+      }
+    }
+    return withCache(this.cacheManager, key, ttlMs, load);
   }
 
   private cacheKey(config: PlaneConfig, parts: string[]): string {

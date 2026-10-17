@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 export const PLANE_CACHE_TTL_MS = 60_000;
 export const PLANE_MAX_PAGES = 10;
 export const PLANE_PAGE_SIZE = 100;
@@ -109,6 +111,67 @@ async function readBody(response: PlaneFetchResponse): Promise<unknown> {
   }
 }
 
+const planeHttpLogger = new Logger('PlaneHttp');
+const DEFAULT_DEBUG_BODY_LIMIT = 4000;
+
+export function planeDebugEnabled(): boolean {
+  return process.env.PLANE_DEBUG?.trim().toLowerCase() === 'true';
+}
+
+function planeDebugBodyLimit(): number {
+  const raw = process.env.PLANE_DEBUG_BODY_LIMIT?.trim();
+  if (!raw) return DEFAULT_DEBUG_BODY_LIMIT;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) return DEFAULT_DEBUG_BODY_LIMIT;
+  return Math.trunc(value);
+}
+
+function redactSecret(text: string, apiKey: string): string {
+  if (!apiKey) return text;
+  return text.split(apiKey).join('***');
+}
+
+function formatDebugBody(value: unknown, apiKey: string): string {
+  let text: string;
+  try {
+    text = typeof value === 'string' ? value : (JSON.stringify(value, null, 2) ?? 'null');
+  } catch {
+    text = String(value);
+  }
+  text = redactSecret(text, apiKey);
+  const limit = planeDebugBodyLimit();
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}\n... truncated`;
+}
+
+export function logPlaneDebug(message: string): void {
+  if (!planeDebugEnabled()) return;
+  planeHttpLogger.log(message);
+}
+
+function logPlaneExchange(input: {
+  method: string;
+  url: string;
+  apiKey: string;
+  requestBody?: unknown;
+  status: number;
+  startedAt: number;
+  responseBody: unknown;
+  retryInMs?: number;
+}): void {
+  if (!planeDebugEnabled()) return;
+  const elapsed = Date.now() - input.startedAt;
+  const retry = input.retryInMs === undefined ? '' : ` retry in ${input.retryInMs}ms`;
+  const lines = [
+    `${input.method} ${redactSecret(input.url, input.apiKey)} ${input.status} ${elapsed}ms${retry}`,
+  ];
+  if (input.requestBody !== undefined) {
+    lines.push(`request ${formatDebugBody(input.requestBody, input.apiKey)}`);
+  }
+  lines.push(`response ${formatDebugBody(input.responseBody, input.apiKey)}`);
+  planeHttpLogger.log(lines.join('\n'));
+}
+
 export async function planeRequest(options: {
   url: string;
   apiKey: string;
@@ -138,14 +201,47 @@ export async function planeRequest(options: {
       dispatcher: options.dispatcher,
     });
 
+  const startedAt = Date.now();
   let response = await call();
   if (retry && response.status === 429) {
     const wait = parseRetryAfterMs(response.headers.get('retry-after'), now());
+    logPlaneExchange({
+      method,
+      url: options.url,
+      apiKey: options.apiKey,
+      requestBody: options.body,
+      status: response.status,
+      startedAt,
+      responseBody: await readBody(response),
+      retryInMs: wait,
+    });
     await sleep(wait);
+    const retryStartedAt = Date.now();
     response = await call();
+    const body = await readBody(response);
+    logPlaneExchange({
+      method,
+      url: options.url,
+      apiKey: options.apiKey,
+      requestBody: options.body,
+      status: response.status,
+      startedAt: retryStartedAt,
+      responseBody: body,
+    });
+    return { status: response.status, body };
   }
 
-  return { status: response.status, body: await readBody(response) };
+  const body = await readBody(response);
+  logPlaneExchange({
+    method,
+    url: options.url,
+    apiKey: options.apiKey,
+    requestBody: options.body,
+    status: response.status,
+    startedAt,
+    responseBody: body,
+  });
+  return { status: response.status, body };
 }
 
 export async function planeListAll(options: {
