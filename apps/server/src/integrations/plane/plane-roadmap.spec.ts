@@ -6,6 +6,7 @@ import {
   parseRoadmapModel,
   removeBar,
   removeLane,
+  packRoadmapRows,
   updateBar,
 } from '../../../../../packages/editor-ext/src/lib/plane-roadmap/model';
 
@@ -272,5 +273,28 @@ describe('parseRoadmapModel', () => {
     });
     expect(parsed?.bars.find((bar) => bar.id === 'bar-b')?.dependsOn).toEqual(['bar-a']);
     expect(parsed?.bars.find((bar) => bar.id === 'bar-b')?.link).toBeNull();
+  });
+});
+
+describe('packRoadmapRows', () => {
+  it('puts bars that share a day on different rows and lets the next day reuse a free row', () => {
+    const packed = packRoadmapRows(
+      ['lane-a', 'lane-b'],
+      [
+        { id: 'a1', laneId: 'lane-a', start: '2026-10-15', end: '2026-10-15' },
+        { id: 'a2', laneId: 'lane-a', start: '2026-10-15', end: '2026-10-15' },
+        { id: 'a3', laneId: 'lane-a', start: '2026-10-16', end: '2026-10-18' },
+        { id: 'b1', laneId: 'lane-b', start: '2026-11-03', end: '2026-11-05' },
+      ],
+    );
+    const a1 = packed.bars.find((bar) => bar.id === 'a1');
+    const a2 = packed.bars.find((bar) => bar.id === 'a2');
+    const a3 = packed.bars.find((bar) => bar.id === 'a3');
+    const b1 = packed.bars.find((bar) => bar.id === 'b1');
+    const laneA = packed.lanes.find((lane) => lane.id === 'lane-a');
+    expect(a1 && a2 && a1.laneRow !== a2.laneRow).toBe(true);
+    expect(a3?.laneRow).toBe(a1?.laneRow);
+    expect(laneA?.rowCount).toBe(2);
+    expect(b1?.row).toBe((laneA?.rowStart ?? 0) + (laneA?.rowCount ?? 0));
   });
 });

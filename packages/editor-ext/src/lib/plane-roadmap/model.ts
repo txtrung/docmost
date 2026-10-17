@@ -317,6 +317,23 @@ export function setZoom(model: RoadmapModel, zoom: RoadmapZoom): RoadmapModel {
   return { ...model, zoom };
 }
 
+export function packRoadmapRows(
+  laneIds: string[],
+  bars: { id: string; laneId: string; start: string; end: string }[],
+): {
+  lanes: { id: string; rowStart: number; rowCount: number }[];
+  bars: { id: string; row: number; laneRow: number }[];
+} {
+  return {
+    lanes: laneIds.map((id, index) => ({ id, rowStart: index, rowCount: 1 })),
+    bars: bars.map((bar) => ({
+      id: bar.id,
+      row: Math.max(0, laneIds.indexOf(bar.laneId)),
+      laneRow: 0,
+    })),
+  };
+}
+
 export function addLane(
   model: RoadmapModel,
   title: string,
