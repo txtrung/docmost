@@ -37,9 +37,11 @@ export type RoadmapModel = {
   projectId: string;
   grouping: RoadmapGrouping;
   zoom: RoadmapZoom;
+  zoomManual: boolean;
   lanes: RoadmapLane[];
   bars: RoadmapBar[];
   removedPlaneIds: string[];
+  unscheduledCount: number;
 };
 
 export type RoadmapPlaneLane = {
@@ -82,9 +84,11 @@ export function emptyRoadmap(
     projectId,
     grouping,
     zoom: "months",
+    zoomManual: false,
     lanes: [],
     bars: [],
     removedPlaneIds: [],
+    unscheduledCount: 0,
   };
 }
 
@@ -136,10 +140,14 @@ export function buildRoadmapFromPlane(input: {
   const bars: RoadmapBar[] = [];
   const seen = new Set<string>();
   let needsUnassigned = false;
+  let unscheduledCount = 0;
 
   for (const item of input.items) {
     const span = spanFrom(item.start, item.end);
-    if (!span) continue;
+    if (!span) {
+      unscheduledCount += 1;
+      continue;
+    }
     let laneKey = input.grouping === "workItems" ? "work-items" : item.laneKey;
     if (!laneKey || !laneIds.has(`plane:lane:${laneKey}`)) {
       if (input.grouping === "workItems") continue;
@@ -156,7 +164,7 @@ export function buildRoadmapFromPlane(input: {
       start: span.start,
       end: span.end,
       color: colorFor(item.id),
-      kind: span.start === span.end ? "milestone" : "bar",
+      kind: "bar",
       source: "plane",
       planeId: item.id,
       overridden: false,
@@ -167,13 +175,20 @@ export function buildRoadmapFromPlane(input: {
 
   if (needsUnassigned) addLane("unassigned", "Unassigned");
 
+  const dated = bars.filter((bar) => lanes.some((lane) => lane.id === bar.laneId));
+  const dates = dated.flatMap((bar) => [bar.start, bar.end]).sort();
+  let zoom: RoadmapZoom = "months";
+  if (input.zoom) zoom = zoomOf(input.zoom);
+  else if (dates.length) zoom = zoomForSpan(dates[0], dates[dates.length - 1]);
   return {
     projectId: input.projectId.slice(0, 64),
     grouping: input.grouping,
-    zoom: zoomOf(input.zoom),
+    zoom,
+    zoomManual: false,
     lanes,
-    bars: bars.filter((bar) => lanes.some((lane) => lane.id === bar.laneId)),
+    bars: dated,
     removedPlaneIds: [],
+    unscheduledCount,
   };
 }
 
@@ -211,9 +226,11 @@ export function parseRoadmapModel(raw: unknown): RoadmapModel | null {
       typeof value.projectId === "string" ? value.projectId.slice(0, 64) : "",
     grouping,
     zoom: zoomOf(value.zoom),
+    zoomManual: value.zoomManual === true,
     lanes: settled.lanes,
     bars: settled.bars,
     removedPlaneIds: parseRemoved(value.removedPlaneIds),
+    unscheduledCount: countOf(value.unscheduledCount),
   };
 }
 
@@ -305,16 +322,25 @@ export function mergeRoadmap(currentRaw: unknown, fresh: RoadmapModel): RoadmapM
     parseRoadmapModel({
       projectId: fresh.projectId,
       grouping: fresh.grouping,
-      zoom: current.zoom,
+      zoom: current.zoomManual ? current.zoom : fresh.zoom,
+      zoomManual: current.zoomManual === true,
       lanes: cappedLanes,
       bars: bars.slice(0, MAX_BARS),
       removedPlaneIds: [...removed].slice(0, MAX_REMOVED),
+      unscheduledCount: fresh.unscheduledCount,
     }) ?? fresh
   );
 }
 
 export function setZoom(model: RoadmapModel, zoom: RoadmapZoom): RoadmapModel {
-  return { ...model, zoom };
+  return { ...model, zoom, zoomManual: true };
+}
+
+export function zoomForSpan(start: string, end: string): RoadmapZoom {
+  const days = Math.max(0, daysBetween(start, end));
+  if (days <= 84) return "weeks";
+  if (days <= 366) return "months";
+  return "quarters";
 }
 
 export function packRoadmapRows(
@@ -324,14 +350,38 @@ export function packRoadmapRows(
   lanes: { id: string; rowStart: number; rowCount: number }[];
   bars: { id: string; row: number; laneRow: number }[];
 } {
-  return {
-    lanes: laneIds.map((id, index) => ({ id, rowStart: index, rowCount: 1 })),
-    bars: bars.map((bar) => ({
-      id: bar.id,
-      row: Math.max(0, laneIds.indexOf(bar.laneId)),
-      laneRow: 0,
-    })),
-  };
+  const lanes: { id: string; rowStart: number; rowCount: number }[] = [];
+  const placed: { id: string; row: number; laneRow: number }[] = [];
+  let cursor = 0;
+  for (const laneId of laneIds) {
+    const laneBars = bars
+      .filter((bar) => bar.laneId === laneId)
+      .sort((left, right) => {
+        if (left.start !== right.start) return left.start < right.start ? -1 : 1;
+        if (left.end !== right.end) return left.end < right.end ? -1 : 1;
+        if (left.id !== right.id) return left.id < right.id ? -1 : 1;
+        return 0;
+      });
+    const rowEnds: string[] = [];
+    const local: { id: string; laneRow: number }[] = [];
+    for (const bar of laneBars) {
+      let laneRow = rowEnds.findIndex((end) => end < bar.start);
+      if (laneRow < 0) {
+        laneRow = rowEnds.length;
+        rowEnds.push(bar.end);
+      } else {
+        rowEnds[laneRow] = bar.end;
+      }
+      local.push({ id: bar.id, laneRow });
+    }
+    const rowCount = Math.max(1, rowEnds.length);
+    lanes.push({ id: laneId, rowStart: cursor, rowCount });
+    for (const bar of local) {
+      placed.push({ id: bar.id, laneRow: bar.laneRow, row: cursor + bar.laneRow });
+    }
+    cursor += rowCount;
+  }
+  return { lanes, bars: placed };
 }
 
 export function addLane(
@@ -462,7 +512,7 @@ export function updateBar(
         start: span.start,
         end: span.end,
         color: patch.color && COLOR_RE.test(patch.color) ? patch.color : bar.color,
-        kind: span.start === span.end ? "milestone" : "bar",
+        kind: bar.kind,
         dependsOn:
           patch.dependsOn !== undefined ? uniqueIds(patch.dependsOn) : bar.dependsOn,
         link: patch.link !== undefined ? parseLink(patch.link) : bar.link,
@@ -520,6 +570,9 @@ function parseBar(raw: unknown, laneIds: Set<string>): RoadmapBar | null {
     typeof value.color === "string" && COLOR_RE.test(value.color)
       ? value.color
       : colorFor(value.id);
+  let kind: RoadmapKind = "bar";
+  if (value.kind === "milestone" || value.kind === "bar") kind = value.kind;
+  else if (span.start === span.end) kind = "milestone";
   return {
     id: value.id,
     laneId: value.laneId,
@@ -527,7 +580,7 @@ function parseBar(raw: unknown, laneIds: Set<string>): RoadmapBar | null {
     start: span.start,
     end: span.end,
     color,
-    kind: span.start === span.end ? "milestone" : "bar",
+    kind,
     source,
     planeId: source === "manual" ? null : planeId,
     overridden: source === "plane" && value.overridden === true,
@@ -650,6 +703,12 @@ function colorFor(id: string): string {
 function groupingOf(value: unknown): RoadmapGrouping | null {
   if (value === "cycles" || value === "modules" || value === "workItems") return value;
   return null;
+}
+
+function countOf(value: unknown): number {
+  const count = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(count) || count < 0) return 0;
+  return Math.min(count, MAX_BARS);
 }
 
 function zoomOf(value: unknown): RoadmapZoom {

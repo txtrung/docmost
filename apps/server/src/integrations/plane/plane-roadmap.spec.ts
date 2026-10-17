@@ -7,7 +7,9 @@ import {
   removeBar,
   removeLane,
   packRoadmapRows,
+  setZoom,
   updateBar,
+  zoomForSpan,
 } from '../../../../../packages/editor-ext/src/lib/plane-roadmap/model';
 
 function fresh() {
@@ -45,7 +47,7 @@ function fresh() {
 }
 
 describe('buildRoadmapFromPlane', () => {
-  it('builds module lanes, dated bars, and a milestone for a single day', () => {
+  it('builds module lanes and dated bars, and counts an item with no dates', () => {
     const model = fresh();
     expect(model.lanes.map((lane) => lane.planeId)).toEqual([
       'mod-a',
@@ -54,8 +56,11 @@ describe('buildRoadmapFromPlane', () => {
     ]);
     expect(model.bars.map((bar) => [bar.planeId, bar.kind, bar.laneId])).toEqual([
       ['item-1', 'bar', 'plane:lane:mod-a'],
-      ['item-2', 'milestone', 'plane:lane:unassigned'],
+      ['item-2', 'bar', 'plane:lane:unassigned'],
     ]);
+    expect(model.unscheduledCount).toBe(1);
+    expect(model.zoom).toBe('weeks');
+    expect(model.zoomManual).toBe(false);
   });
 
   it('uses one lane for work items', () => {
@@ -163,7 +168,7 @@ describe('mergeRoadmap', () => {
 });
 
 describe('parseRoadmapModel', () => {
-  it('derives milestone from equal dates and drops a bar whose lane is missing', () => {
+  it('keeps an explicit bar kind when the dates are equal and drops a bar whose lane is missing', () => {
     const parsed = parseRoadmapModel({
       projectId: 'project-1',
       grouping: 'modules',
@@ -207,7 +212,7 @@ describe('parseRoadmapModel', () => {
     expect(parsed?.bars[0]).toMatchObject({
       start: '2026-05-01',
       end: '2026-05-01',
-      kind: 'milestone',
+      kind: 'bar',
       planeId: null,
     });
     expect(parsed?.removedPlaneIds).toEqual(['item-9']);
@@ -273,6 +278,26 @@ describe('parseRoadmapModel', () => {
     });
     expect(parsed?.bars.find((bar) => bar.id === 'bar-b')?.dependsOn).toEqual(['bar-a']);
     expect(parsed?.bars.find((bar) => bar.id === 'bar-b')?.link).toBeNull();
+  });
+});
+
+describe('mergeRoadmap zoom', () => {
+  it('keeps a manual zoom and takes the fresh zoom when zoom was automatic', () => {
+    const next = { ...fresh(), zoom: 'months' as const };
+    expect(mergeRoadmap(fresh(), next).zoom).toBe('months');
+    expect(mergeRoadmap(fresh(), next).zoomManual).toBe(false);
+    const manual = mergeRoadmap(setZoom(fresh(), 'quarters'), next);
+    expect(manual.zoom).toBe('quarters');
+    expect(manual.zoomManual).toBe(true);
+    expect(manual.unscheduledCount).toBe(1);
+  });
+});
+
+describe('zoomForSpan', () => {
+  it('uses weeks for a few weeks, months for a year, and quarters past a year', () => {
+    expect(zoomForSpan('2026-10-15', '2026-11-13')).toBe('weeks');
+    expect(zoomForSpan('2026-01-01', '2026-12-01')).toBe('months');
+    expect(zoomForSpan('2024-01-01', '2026-06-01')).toBe('quarters');
   });
 });
 

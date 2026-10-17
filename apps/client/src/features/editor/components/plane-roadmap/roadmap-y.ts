@@ -37,6 +37,8 @@ export function readSharedRoadmap(map: Y.Map<unknown>, fallback: RoadmapModel): 
       projectId: text(map.get("projectId")) || fallback.projectId,
       grouping: map.get("grouping") || fallback.grouping,
       zoom: map.get("zoom") || fallback.zoom,
+      zoomManual: map.get("zoomManual") === true,
+      unscheduledCount: map.get("unscheduledCount") ?? fallback.unscheduledCount,
       lanes,
       bars,
       removedPlaneIds: parseJson(map.get("removedPlaneIds"), []),
@@ -62,6 +64,10 @@ export function writeChangedRoadmap(
     if (origin.projectId !== next.projectId) map.set("projectId", next.projectId);
     if (origin.grouping !== next.grouping) map.set("grouping", next.grouping);
     if (origin.zoom !== next.zoom) map.set("zoom", next.zoom);
+    if (origin.zoomManual !== next.zoomManual) map.set("zoomManual", next.zoomManual);
+    if (origin.unscheduledCount !== next.unscheduledCount) {
+      map.set("unscheduledCount", next.unscheduledCount);
+    }
     if (JSON.stringify(origin.removedPlaneIds) !== JSON.stringify(next.removedPlaneIds)) {
       map.set("removedPlaneIds", JSON.stringify(next.removedPlaneIds));
     }

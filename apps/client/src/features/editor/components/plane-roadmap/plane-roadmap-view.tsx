@@ -22,11 +22,13 @@ import {
   daysBetween,
   emptyRoadmap,
   parseRoadmapModel,
+  packRoadmapRows,
   removeBar,
   removeLane,
   setZoom,
   updateBar,
   updateLane,
+  zoomForSpan,
   type RoadmapBar,
   type RoadmapGrouping,
   type RoadmapLane,
@@ -63,10 +65,25 @@ function groupingOf(value: unknown): RoadmapGrouping {
   return value === "cycles" || value === "workItems" ? value : "modules";
 }
 
+const ROW_HEIGHT = 40;
+
 function dayWidth(zoom: RoadmapZoom): number {
   if (zoom === "weeks") return 16;
   if (zoom === "quarters") return 1.6;
   return 4;
+}
+
+function barMetrics(
+  bar: { start: string; end: string; kind: RoadmapBar["kind"] },
+  rangeStart: string,
+  unit: number,
+  row: number,
+) {
+  const left = daysBetween(rangeStart, bar.start) * unit;
+  const width =
+    bar.kind === "milestone" ? 14 : Math.max(1, daysBetween(bar.start, bar.end)) * unit;
+  const top = row * ROW_HEIGHT + (bar.kind === "milestone" ? 12 : 10);
+  return { left, width, top, centerY: row * ROW_HEIGHT + 19 };
 }
 
 function todayIso(): string {
@@ -133,10 +150,9 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
   const [configured, setConfigured] = useState(true);
   const [error, setError] = useState("");
   const [syncing, setSyncing] = useState(false);
-  const [viewerZoom, setViewerZoom] = useState<RoadmapZoom>(model.zoom);
+  const [viewerZoom, setViewerZoom] = useState<RoadmapZoom | null>(null);
   const [preview, setPreview] = useState<{ id: string; start: string; end: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const zoom = isEditable ? model.zoom : viewerZoom;
   const markerId = useId().replace(/:/g, "");
   const updateRef = useRef(updateAttributes);
   updateRef.current = updateAttributes;
@@ -224,11 +240,28 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
   }
 
   const range = rangeOf(model);
+  const barDates = model.bars.flatMap((bar) => [bar.start, bar.end]).sort();
+  const fittedZoom = barDates.length
+    ? zoomForSpan(barDates[0], barDates[barDates.length - 1])
+    : "months";
+  let zoom = fittedZoom;
+  if (!isEditable && viewerZoom) zoom = viewerZoom;
+  else if (model.zoomManual) zoom = model.zoom;
   const width = dayWidth(zoom);
   const span = Math.max(1, daysBetween(range.start, range.end));
   const trackWidth = span * width;
   const ticks = ticksFor(range.start, range.end, zoom, width);
   const todayX = daysBetween(range.start, range.today) * width;
+  const laneOrder = orderedLanes(model.lanes);
+  const displayBars = model.bars.map((bar) =>
+    preview?.id === bar.id ? { ...bar, start: preview.start, end: preview.end } : bar,
+  );
+  const layout = packRoadmapRows(
+    laneOrder.map((lane) => lane.id),
+    displayBars,
+  );
+  const laneLayout = new Map(layout.lanes.map((lane) => [lane.id, lane]));
+  const barLayout = new Map(layout.bars.map((bar) => [bar.id, bar]));
 
   return (
     <NodeViewWrapper data-drag-handle>
@@ -374,6 +407,11 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
                 {t("No lanes yet.")}
               </Text>
             )}
+            {model.unscheduledCount > 0 && (
+              <Text size="sm" c="dimmed" mb="xs">
+                {t("{{total}} unscheduled", { total: model.unscheduledCount })}
+              </Text>
+            )}
             <div className={classes.scroll}>
               <div className={classes.chart}>
               <div className={classes.grid} style={{ width: 180 + trackWidth }}>
@@ -385,7 +423,7 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
                     </span>
                   ))}
                 </div>
-                {orderedLanes(model.lanes).map((lane) => (
+                {laneOrder.map((lane) => (
                   <LaneRow
                     key={lane.id}
                     lane={lane}
@@ -397,6 +435,8 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
                     todayX={todayX}
                     preview={preview}
                     editingId={editingId}
+                    rowCount={laneLayout.get(lane.id)?.rowCount ?? 1}
+                    barLayout={barLayout}
                     onCommit={commit}
                     onPreview={setPreview}
                     onEdit={setEditingId}
@@ -405,8 +445,9 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
                 ))}
               </div>
               <DependencyArrows
-                model={model}
-                rows={orderedLanes(model.lanes)}
+                bars={displayBars}
+                placed={layout.bars}
+                totalRows={layout.lanes.reduce((sum, lane) => sum + lane.rowCount, 0)}
                 rangeStart={range.start}
                 dayWidth={width}
                 trackWidth={trackWidth}
@@ -431,6 +472,8 @@ function LaneRow({
   todayX,
   preview,
   editingId,
+  rowCount,
+  barLayout,
   onCommit,
   onPreview,
   onEdit,
@@ -445,15 +488,21 @@ function LaneRow({
   todayX: number;
   preview: { id: string; start: string; end: string } | null;
   editingId: string | null;
+  rowCount: number;
+  barLayout: Map<string, { row: number; laneRow: number }>;
   onCommit: (next: RoadmapModel) => void;
   onPreview: (preview: { id: string; start: string; end: string } | null) => void;
   onEdit: (id: string | null) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const bars = model.bars.filter((bar) => bar.laneId === lane.id);
+  const laneHeight = rowCount * ROW_HEIGHT;
   return (
     <>
-      <div className={lane.parentId ? `${classes.laneLabel} ${classes.subLane}` : classes.laneLabel}>
+      <div
+        className={lane.parentId ? `${classes.laneLabel} ${classes.subLane}` : classes.laneLabel}
+        style={{ minHeight: laneHeight }}
+      >
         {editable ? (
           <input
             key={`${lane.id}:${lane.title}`}
@@ -493,7 +542,7 @@ function LaneRow({
           </ActionIcon>
         )}
       </div>
-      <div className={classes.track} style={{ width: trackWidth }}>
+      <div className={classes.track} style={{ width: trackWidth, height: laneHeight }}>
         <div className={classes.today} style={{ left: todayX }} title={t("Today")} />
         {bars.map((bar) => (
           <RoadmapBarView
@@ -503,6 +552,7 @@ function LaneRow({
             editable={editable}
             dayWidth={dayWidth}
             rangeStart={rangeStart}
+            laneRow={barLayout.get(bar.id)?.laneRow ?? 0}
             editing={editingId === bar.id}
             onCommit={onCommit}
             onPreview={onPreview}
@@ -521,6 +571,7 @@ function RoadmapBarView({
   editable,
   dayWidth,
   rangeStart,
+  laneRow,
   editing,
   onCommit,
   onPreview,
@@ -532,14 +583,14 @@ function RoadmapBarView({
   editable: boolean;
   dayWidth: number;
   rangeStart: string;
+  laneRow: number;
   editing: boolean;
   onCommit: (next: RoadmapModel) => void;
   onPreview: (preview: { id: string; start: string; end: string } | null) => void;
   onEdit: (id: string | null) => void;
   t: (key: string) => string;
 }) {
-  const left = daysBetween(rangeStart, bar.start) * dayWidth;
-  const barWidth = Math.max(bar.kind === "milestone" ? 14 : 12, daysBetween(bar.start, bar.end) * dayWidth);
+  const box = barMetrics(bar, rangeStart, dayWidth, laneRow);
 
   function begin(event: React.PointerEvent, edge: DragEdge) {
     if (!editable) {
@@ -596,8 +647,9 @@ function RoadmapBarView({
       type="button"
       className={bar.kind === "milestone" ? classes.milestone : classes.bar}
       style={{
-        left,
-        width: bar.kind === "milestone" ? 14 : barWidth,
+        left: box.left,
+        top: box.top,
+        width: box.width,
         background: bar.color,
         cursor: editable ? "grab" : "default",
       }}
@@ -739,8 +791,6 @@ function RoadmapBarView({
   );
 }
 
-const ROW_HEIGHT = 40;
-
 function orderedLanes(lanes: RoadmapLane[]): RoadmapLane[] {
   const rows: RoadmapLane[] = [];
   for (const lane of lanes) {
@@ -754,34 +804,36 @@ function orderedLanes(lanes: RoadmapLane[]): RoadmapLane[] {
 }
 
 function DependencyArrows({
-  model,
-  rows,
+  bars,
+  placed,
+  totalRows,
   rangeStart,
   dayWidth,
   trackWidth,
   markerId,
 }: {
-  model: RoadmapModel;
-  rows: RoadmapLane[];
+  bars: RoadmapBar[];
+  placed: { id: string; row: number; laneRow: number }[];
+  totalRows: number;
   rangeStart: string;
   dayWidth: number;
   trackWidth: number;
   markerId: string;
 }) {
-  const index = new Map(rows.map((lane, row) => [lane.id, row]));
-  const arrows = model.bars.flatMap((bar) =>
+  const rows = new Map(placed.map((bar) => [bar.id, bar.row]));
+  const height = Math.max(totalRows * ROW_HEIGHT, 1);
+  const arrows = bars.flatMap((bar) =>
     bar.dependsOn.map((dependencyId) => {
-      const from = model.bars.find((item) => item.id === dependencyId);
-      if (!from) return null;
-      const fromRow = index.get(from.laneId);
-      const toRow = index.get(bar.laneId);
-      if (fromRow === undefined || toRow === undefined) return null;
-      const x1 =
-        daysBetween(rangeStart, from.start) * dayWidth +
-        (from.kind === "milestone" ? 14 : Math.max(12, daysBetween(from.start, from.end) * dayWidth));
-      const y1 = fromRow * ROW_HEIGHT + 19;
-      const x2 = daysBetween(rangeStart, bar.start) * dayWidth;
-      const y2 = toRow * ROW_HEIGHT + 19;
+      const from = bars.find((item) => item.id === dependencyId);
+      const fromRow = rows.get(dependencyId);
+      const toRow = rows.get(bar.id);
+      if (!from || fromRow === undefined || toRow === undefined) return null;
+      const fromBox = barMetrics(from, rangeStart, dayWidth, fromRow);
+      const toBox = barMetrics(bar, rangeStart, dayWidth, toRow);
+      const x1 = fromBox.left + fromBox.width;
+      const y1 = fromBox.centerY;
+      const x2 = toBox.left;
+      const y2 = toBox.centerY;
       const mid = (x1 + x2) / 2;
       return (
         <path
@@ -799,8 +851,8 @@ function DependencyArrows({
     <svg
       className={classes.arrows}
       width={trackWidth}
-      height={Math.max(rows.length * ROW_HEIGHT, 1)}
-      style={{ width: trackWidth, height: Math.max(rows.length * ROW_HEIGHT, 1) }}
+      height={height}
+      style={{ width: trackWidth, height }}
       aria-hidden="true"
     >
       <defs>
@@ -813,6 +865,15 @@ function DependencyArrows({
   );
 }
 
+function clippedTitle(context: CanvasRenderingContext2D, title: string, maxWidth: number): string {
+  if (maxWidth <= 4) return "";
+  if (context.measureText(title).width <= maxWidth) return title;
+  const mark = "…";
+  let end = title.length;
+  while (end > 0 && context.measureText(`${title.slice(0, end)}${mark}`).width > maxWidth) end -= 1;
+  return end === 0 ? "" : `${title.slice(0, end)}${mark}`;
+}
+
 function exportRoadmapPng(
   model: RoadmapModel,
   zoom: RoadmapZoom,
@@ -822,20 +883,28 @@ function exportRoadmapPng(
   if (!rows.length) return;
   const range = rangeOf(model);
   const width = dayWidth(zoom);
+  const layout = packRoadmapRows(
+    rows.map((lane) => lane.id),
+    model.bars,
+  );
+  const placed = new Map(layout.bars.map((bar) => [bar.id, bar.row]));
+  const laneLayout = new Map(layout.lanes.map((lane) => [lane.id, lane]));
+  const totalRows = layout.lanes.reduce((sum, lane) => sum + lane.rowCount, 0);
   const labelWidth = 180;
   const trackWidth = Math.max(1, daysBetween(range.start, range.end)) * width;
   const header = 28;
+  const body = Math.max(totalRows, 1) * ROW_HEIGHT;
   const scale = 2;
   const canvas = document.createElement("canvas");
   canvas.width = Math.ceil((labelWidth + trackWidth) * scale);
-  canvas.height = Math.ceil((header + rows.length * ROW_HEIGHT) * scale);
+  canvas.height = Math.ceil((header + body) * scale);
   const context = canvas.getContext("2d");
   if (!context) return;
   context.scale(scale, scale);
   context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, labelWidth + trackWidth, header + rows.length * ROW_HEIGHT);
+  context.fillRect(0, 0, labelWidth + trackWidth, header + body);
   context.strokeStyle = "#dee2e6";
-  context.strokeRect(0, 0, labelWidth + trackWidth, header + rows.length * ROW_HEIGHT);
+  context.strokeRect(0, 0, labelWidth + trackWidth, header + body);
   context.fillStyle = "#868e96";
   context.font = "11px sans-serif";
   for (const tick of ticksFor(range.start, range.end, zoom, width)) {
@@ -845,32 +914,50 @@ function exportRoadmapPng(
   context.strokeStyle = "#fa5252";
   context.beginPath();
   context.moveTo(todayX, header);
-  context.lineTo(todayX, header + rows.length * ROW_HEIGHT);
+  context.lineTo(todayX, header + body);
   context.stroke();
-  rows.forEach((lane, row) => {
-    const top = header + row * ROW_HEIGHT;
+  for (const lane of rows) {
+    const slot = laneLayout.get(lane.id);
+    const top = header + (slot?.rowStart ?? 0) * ROW_HEIGHT;
+    const laneHeight = (slot?.rowCount ?? 1) * ROW_HEIGHT;
+    context.strokeStyle = "#dee2e6";
+    context.beginPath();
+    context.moveTo(0, top);
+    context.lineTo(labelWidth + trackWidth, top);
+    context.stroke();
+    context.save();
+    context.beginPath();
+    context.rect(0, top, labelWidth - 4, laneHeight);
+    context.clip();
     context.fillStyle = "#212529";
     context.font = "13px sans-serif";
     context.fillText(laneLabel(lane, t), lane.parentId ? 24 : 8, top + 24);
+    context.restore();
     for (const bar of model.bars.filter((item) => item.laneId === lane.id)) {
-      const x = labelWidth + daysBetween(range.start, bar.start) * width;
-      const barWidth =
-        bar.kind === "milestone" ? 12 : Math.max(12, daysBetween(bar.start, bar.end) * width);
+      const box = barMetrics(bar, range.start, width, placed.get(bar.id) ?? slot?.rowStart ?? 0);
+      const x = labelWidth + box.left;
+      const y = header + box.top;
       context.fillStyle = bar.color;
       if (bar.kind === "milestone") {
         context.save();
-        context.translate(x + 7, top + 20);
+        context.translate(x + 7, y + 7);
         context.rotate(Math.PI / 4);
         context.fillRect(-6, -6, 12, 12);
         context.restore();
-      } else {
-        context.fillRect(x, top + 12, barWidth, 16);
-        context.fillStyle = "#ffffff";
-        context.font = "11px sans-serif";
-        context.fillText(bar.title, x + 4, top + 24);
+        continue;
       }
+      context.fillRect(x, y, box.width, 18);
+      context.save();
+      context.beginPath();
+      context.rect(x, y, box.width, 18);
+      context.clip();
+      context.fillStyle = "#ffffff";
+      context.font = "11px sans-serif";
+      const label = clippedTitle(context, bar.title, box.width - 8);
+      if (label) context.fillText(label, x + 4, y + 13);
+      context.restore();
     }
-  });
+  }
   canvas.toBlob((blob) => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);

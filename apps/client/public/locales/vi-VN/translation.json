@@ -1783,5 +1783,6 @@
   "Expected a value.": "Cần một giá trị.",
   "Expected ) after the value list.": "Cần ) sau danh sách giá trị.",
   "Expected ORDER BY and a field.": "Cần ORDER BY và một trường.",
-  "The query has text after ORDER BY.": "Còn chữ sau ORDER BY."
+  "The query has text after ORDER BY.": "Còn chữ sau ORDER BY.",
+  "{{total}} unscheduled": "{{total}} chưa xếp lịch"
 }

@@ -1783,5 +1783,6 @@
   "Expected a value.": "Expected a value.",
   "Expected ) after the value list.": "Expected ) after the value list.",
   "Expected ORDER BY and a field.": "Expected ORDER BY and a field.",
-  "The query has text after ORDER BY.": "The query has text after ORDER BY."
+  "The query has text after ORDER BY.": "The query has text after ORDER BY.",
+  "{{total}} unscheduled": "{{total}} unscheduled"
 }

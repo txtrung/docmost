@@ -58,4 +58,15 @@ describe("roadmap y maps", () => {
     expect(titles).toEqual(["One", "Two"]);
     expect(map.get("migrated")).toBe(true);
   });
+
+  it("keeps a manual zoom and the unscheduled count", () => {
+    const doc = new Y.Doc();
+    const map = nodeMap(doc);
+    const model = { ...sample(), zoom: "weeks" as const, zoomManual: true, unscheduledCount: 1 };
+    writeChangedRoadmap(map, emptyRoadmap("proj1"), model);
+    const read = readSharedRoadmap(map, emptyRoadmap());
+    expect(read.zoom).toBe("weeks");
+    expect(read.zoomManual).toBe(true);
+    expect(read.unscheduledCount).toBe(1);
+  });
 });
