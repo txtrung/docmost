@@ -32,6 +32,9 @@ import {
   IconMoodSmile,
   IconRotate2,
   IconSuperscript,
+  IconChecklist,
+  IconTimeline,
+  IconListTree,
 } from "@tabler/icons-react";
 import {
   CommandProps,
@@ -575,6 +578,33 @@ const CommandGroups: SlashMenuGroupedItemsType = {
       icon: IconSitemap,
       command: ({ editor, range }: CommandProps) => {
         editor.chain().focus().deleteRange(range).insertSubpages().run();
+      },
+    },
+    {
+      title: "Plane tasks",
+      description: "List work items from a Plane project.",
+      searchTerms: ["plane", "tasks", "issues", "work items"],
+      icon: IconChecklist,
+      command: ({ editor, range }: CommandProps) => {
+        editor.chain().focus().deleteRange(range).insertPlaneTaskList().run();
+      },
+    },
+    {
+      title: "Plane roadmap",
+      description: "Insert an editable timeline from Plane.",
+      searchTerms: ["plane", "roadmap", "gantt", "timeline"],
+      icon: IconTimeline,
+      command: ({ editor, range }: CommandProps) => {
+        editor.chain().focus().deleteRange(range).insertPlaneRoadmap().run();
+      },
+    },
+    {
+      title: "Table of contents",
+      description: "Insert a table of contents for this page.",
+      searchTerms: ["toc", "contents", "outline", "headings"],
+      icon: IconListTree,
+      command: ({ editor, range }: CommandProps) => {
+        editor.chain().focus().deleteRange(range).insertTableOfContents().run();
       },
     },
     {

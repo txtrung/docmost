@@ -53,6 +53,9 @@ import {
   Tab,
   TabLabel,
   TabPanel,
+  PlaneTaskList,
+  PlaneRoadmap,
+  TableOfContentsBlock,
 } from '@docmost/editor-ext';
 import {
   extensions as coreExtensions,
@@ -137,6 +140,9 @@ export const tiptapExtensions = [
   Footnotes,
   Footnote,
   FootnoteReference,
+  PlaneTaskList,
+  PlaneRoadmap,
+  TableOfContentsBlock,
 ] as any;
 
 export function jsonToHtml(tiptapJson: any) {

@@ -40,3 +40,6 @@ export {
   type DocxImageResolver,
 } from "./lib/prosemirror-docx";
 export * from "./lib/base-embed";
+export * from "./lib/plane-task-list";
+export * from "./lib/plane-roadmap";
+export * from "./lib/table-of-contents";

@@ -1,0 +1,127 @@
+.scroll {
+  overflow-x: auto;
+}
+
+.chart {
+  position: relative;
+}
+
+.arrows {
+  position: absolute;
+  left: 180px;
+  top: 22px;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.subLane {
+  padding-left: 18px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+
+.laneLabel {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 6px 8px;
+  background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-7));
+  border-right: 1px solid
+    light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-top: 1px solid
+    light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+}
+
+.laneInput {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: var(--mantine-font-size-sm);
+}
+
+.laneName {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+  font-size: var(--mantine-font-size-sm);
+  cursor: text;
+}
+
+.outsideLabel {
+  position: absolute;
+  height: 18px;
+  line-height: 18px;
+  font-size: 11px;
+  color: light-dark(var(--mantine-color-black), var(--mantine-color-gray-1));
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.track {
+  position: relative;
+  min-height: 40px;
+  border-top: 1px solid
+    light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+}
+
+.tick {
+  position: absolute;
+  top: 0;
+  font-size: 11px;
+  color: var(--mantine-color-dimmed);
+  white-space: nowrap;
+}
+
+.today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--mantine-color-red-6);
+  pointer-events: none;
+}
+
+.bar {
+  position: absolute;
+  top: 10px;
+  height: 18px;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.milestone {
+  position: absolute;
+  top: 12px;
+  width: 14px;
+  height: 14px;
+  border: none;
+  transform: rotate(45deg);
+  padding: 0;
+}
+
+.handle {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 100%;
+  cursor: ew-resize;
+}

@@ -1,0 +1,312 @@
+import { NormalizedPlaneTask, PlaneClause, PlaneFilterInput } from './plane.types';
+
+const STRING_FIELDS = [
+  'state',
+  'stateGroup',
+  'assignee',
+  'label',
+  'cycle',
+  'module',
+  'priority',
+  'startFrom',
+  'startTo',
+  'dueFrom',
+  'dueTo',
+  'search',
+  'id',
+  'sort',
+] as const;
+
+const PRIORITY_RANK: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  none: 4,
+};
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 100;
+
+export function sanitizePlaneFilters(input: unknown): PlaneFilterInput {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {};
+  }
+
+  const source = input as Record<string, unknown>;
+  const filters: PlaneFilterInput = {};
+
+  for (const field of STRING_FIELDS) {
+    const value = source[field];
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    filters[field] = trimmed.slice(0, 200);
+  }
+
+  const limit = source.limit;
+  if (typeof limit === 'number' && Number.isFinite(limit)) {
+    filters.limit = Math.trunc(limit);
+  } else if (typeof limit === 'string' && /^\d+$/.test(limit.trim())) {
+    filters.limit = Number(limit.trim());
+  }
+
+  const page = source.page;
+  if (typeof page === 'number' && Number.isFinite(page)) {
+    filters.page = Math.trunc(page);
+  } else if (typeof page === 'string' && /^\d+$/.test(page.trim())) {
+    filters.page = Number(page.trim());
+  }
+
+  return filters;
+}
+
+function same(value: string | null | undefined, expected: string): boolean {
+  return (value ?? '').toLowerCase() === expected.toLowerCase();
+}
+
+function dateBound(value: string | undefined): string | undefined {
+  if (!value || !DATE_RE.test(value)) return undefined;
+  return value;
+}
+
+function inRange(
+  value: string | null,
+  from: string | undefined,
+  to: string | undefined,
+): boolean {
+  if (!from && !to) return true;
+  if (!value) return false;
+  if (from && value < from) return false;
+  if (to && value > to) return false;
+  return true;
+}
+
+function matchesAssignee(
+  item: NormalizedPlaneTask,
+  assignee: string,
+  currentEmail: string,
+): boolean {
+  if (assignee.toLowerCase() === 'me') {
+    const email = currentEmail.trim().toLowerCase();
+    if (!email) return false;
+    return item.assignees.some(
+      (person) => person.email.trim().toLowerCase() === email,
+    );
+  }
+
+  return item.assignees.some(
+    (person) => same(person.email, assignee) || same(person.id, assignee),
+  );
+}
+
+function matches(item: NormalizedPlaneTask, filters: PlaneFilterInput, email: string): boolean {
+  if (filters.clauses) return clausesMatch(item, filters.clauses, email);
+  if (filters.id && !same(item.id, filters.id)) return false;
+  if (filters.state && !same(item.stateId, filters.state) && !same(item.stateName, filters.state)) {
+    return false;
+  }
+  if (filters.stateGroup && !same(item.stateGroup, filters.stateGroup)) {
+    return false;
+  }
+  if (filters.assignee && !matchesAssignee(item, filters.assignee, email)) {
+    return false;
+  }
+  if (
+    filters.label &&
+    !item.labels.some(
+      (label) => same(label.id, filters.label) || same(label.name, filters.label),
+    )
+  ) {
+    return false;
+  }
+  if (filters.cycle && !same(item.cycleId, filters.cycle)) {
+    return false;
+  }
+  if (
+    filters.module &&
+    !item.moduleIds.some((moduleId) => same(moduleId, filters.module))
+  ) {
+    return false;
+  }
+  if (filters.priority && !same(item.priority, filters.priority)) {
+    return false;
+  }
+  if (
+    !inRange(item.startDate, dateBound(filters.startFrom), dateBound(filters.startTo))
+  ) {
+    return false;
+  }
+  if (!inRange(item.dueDate, dateBound(filters.dueFrom), dateBound(filters.dueTo))) {
+    return false;
+  }
+
+  if (filters.search) {
+    const needle = filters.search.toLowerCase();
+    const haystack = [
+      item.title,
+      item.ref ?? '',
+      item.sequenceId?.toString() ?? '',
+      item.stateName ?? '',
+      ...item.labels.map((label) => label.name),
+      ...item.assignees.map((person) => `${person.name} ${person.email}`),
+    ]
+      .join(' ')
+      .toLowerCase();
+    if (!haystack.includes(needle)) return false;
+  }
+
+  return true;
+}
+
+function clausesMatch(item: NormalizedPlaneTask, clauses: PlaneClause[], email: string): boolean {
+  return clauses.every((clause) => clauseMatches(item, clause, email));
+}
+
+function clauseMatches(item: NormalizedPlaneTask, clause: PlaneClause, email: string): boolean {
+  const values = clause.values.map((value) => value.toLowerCase());
+  const hit = values.some((value) => clauseValueHits(item, clause.field, value, email));
+  if (clause.op === 'neq') return !hit;
+  return hit;
+}
+
+function clauseValueHits(
+  item: NormalizedPlaneTask,
+  field: string,
+  value: string,
+  email: string,
+): boolean {
+  switch (field) {
+    case 'state':
+      return same(item.stateId, value) || same(item.stateName, value);
+    case 'stateGroup':
+      return same(item.stateGroup, value);
+    case 'priority':
+      return same(item.priority, value);
+    case 'assignee':
+      return matchesAssignee(item, value, email);
+    case 'label':
+      return item.labels.some((label) => same(label.id, value) || same(label.name, value));
+    case 'cycle':
+      return same(item.cycleId, value);
+    case 'module':
+      return item.moduleIds.some((moduleId) => same(moduleId, value));
+    case 'created':
+      return (item.createdAt ?? '').slice(0, 10) === value;
+    case 'updated':
+      return (item.updatedAt ?? '').slice(0, 10) === value;
+    case 'target':
+      return (item.dueDate ?? '') === value;
+    default:
+      return false;
+  }
+}
+
+function isNullish(value: string | number | null | undefined): boolean {
+  return value === null || value === undefined || value === '';
+}
+
+function compareValues(
+  left: string | number | null,
+  right: string | number | null,
+  desc: boolean,
+): number {
+  const leftMissing = isNullish(left);
+  const rightMissing = isNullish(right);
+  if (leftMissing || rightMissing) {
+    if (leftMissing && rightMissing) return 0;
+    return leftMissing ? 1 : -1;
+  }
+  if (left! < right!) return desc ? 1 : -1;
+  if (left! > right!) return desc ? -1 : 1;
+  return 0;
+}
+
+function compareTasks(
+  left: NormalizedPlaneTask,
+  right: NormalizedPlaneTask,
+  sort: string | undefined,
+): number {
+  if (!sort) return 0;
+  const [field, direction] = sort.split(':');
+  const desc = direction !== 'asc';
+
+  switch (field) {
+    case 'title':
+      return compareValues(left.title.toLowerCase(), right.title.toLowerCase(), desc);
+    case 'due':
+      return compareValues(left.dueDate, right.dueDate, desc);
+    case 'start':
+      return compareValues(left.startDate, right.startDate, desc);
+    case 'updated':
+      return compareValues(left.updatedAt, right.updatedAt, desc);
+    case 'created':
+      return compareValues(left.createdAt, right.createdAt, desc);
+    case 'sequence':
+      return compareValues(left.sequenceId, right.sequenceId, desc);
+    case 'priority': {
+      const leftRank = PRIORITY_RANK[left.priority.toLowerCase()] ?? 5;
+      const rightRank = PRIORITY_RANK[right.priority.toLowerCase()] ?? 5;
+      // Rank 0 is urgent. Descending priority lists urgent first.
+      return compareValues(rightRank, leftRank, desc);
+    }
+    case 'state':
+      return compareValues(
+        (left.stateName ?? '').toLowerCase(),
+        (right.stateName ?? '').toLowerCase(),
+        desc,
+      );
+    case 'assignee':
+      return compareValues(firstAssignee(left), firstAssignee(right), desc);
+    case 'label':
+      return compareValues(firstLabel(left), firstLabel(right), desc);
+    default:
+      return 0;
+  }
+}
+
+function firstAssignee(item: NormalizedPlaneTask): string {
+  const person = item.assignees[0];
+  return (person?.name || person?.email || '').toLowerCase();
+}
+
+function firstLabel(item: NormalizedPlaneTask): string {
+  return (item.labels[0]?.name || '').toLowerCase();
+}
+
+function clampLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit) || limit <= 0) {
+    return DEFAULT_LIMIT;
+  }
+  return Math.min(Math.trunc(limit), MAX_LIMIT);
+}
+
+function clampPage(page: number | undefined): number {
+  if (page === undefined || !Number.isFinite(page) || page < 1) return 1;
+  return Math.min(Math.trunc(page), 1000);
+}
+
+export function filterPlaneWorkItems(
+  items: NormalizedPlaneTask[],
+  filters: PlaneFilterInput,
+  currentEmail: string,
+): { items: NormalizedPlaneTask[]; total: number } {
+  const matched = items.filter((item) => matches(item, filters, currentEmail));
+  const sorted = filters.sort
+    ? matched
+        .map((item, index) => ({ item, index }))
+        .sort((left, right) => {
+          const result = compareTasks(left.item, right.item, filters.sort);
+          return result || left.index - right.index;
+        })
+        .map((entry) => entry.item)
+    : matched;
+
+  const limit = clampLimit(filters.limit);
+  const start = (clampPage(filters.page) - 1) * limit;
+  return {
+    items: sorted.slice(start, start + limit),
+    total: sorted.length,
+  };
+}
