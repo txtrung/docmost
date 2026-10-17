@@ -37,6 +37,12 @@ import {
   normalizeWorkItem,
 } from './plane-normalize';
 import { filterPlaneWorkItems, sanitizePlaneFilters } from './plane-filters';
+import {
+  CycleMembership,
+  ModuleMembership,
+  attachMembership,
+  issueIdFromMembershipRow,
+} from './plane-membership';
 import { parsePlaneQuery, projectClauseAllows, queryToFilters } from './plane-query';
 import { buildRoadmapFromPlane, mergeRoadmap } from '@docmost/editor-ext';
 import {
@@ -200,17 +206,19 @@ export class PlaneService {
         return { items: [], total: 0 };
       }
       const paging = sanitizePlaneFilters(filters);
-      return filterPlaneWorkItems(
-        tasks,
-        queryToFilters(parsed.value, paging.page, paging.limit),
-        normalizedEmail,
-      );
+      const applied = queryToFilters(parsed.value, paging.page, paging.limit);
+      const joined = await this.withMembership(config, projectId, tasks, {
+        modules: applied.clauses?.some((clause) => clause.field === 'module') ?? false,
+        cycles: applied.clauses?.some((clause) => clause.field === 'cycle') ?? false,
+      });
+      return filterPlaneWorkItems(joined, applied, normalizedEmail);
     }
-    return filterPlaneWorkItems(
-      tasks,
-      sanitizePlaneFilters(filters),
-      normalizedEmail,
-    );
+    const sanitized = sanitizePlaneFilters(filters);
+    const joined = await this.withMembership(config, projectId, tasks, {
+      modules: Boolean(sanitized.module),
+      cycles: Boolean(sanitized.cycle),
+    });
+    return filterPlaneWorkItems(joined, sanitized, normalizedEmail);
   }
 
   async listCycles(email: string, projectId: string): Promise<PlaneCycle[]> {
@@ -283,7 +291,15 @@ export class PlaneService {
     const normalizedEmail = this.requireEmail(email);
     await this.assertMember(config, projectId, normalizedEmail);
 
-    const tasks = await this.cachedWorkItems(config, projectId);
+    const tasks = await this.withMembership(
+      config,
+      projectId,
+      await this.cachedWorkItems(config, projectId),
+      {
+        modules: grouping === 'modules',
+        cycles: grouping === 'cycles',
+      },
+    );
     const cycles =
       grouping === 'cycles'
         ? await this.cachedCollection(config, projectId, 'cycles', normalizeCycle)
@@ -470,6 +486,96 @@ export class PlaneService {
     return collection;
   }
 
+  private async withMembership(
+    config: PlaneConfig,
+    projectId: string,
+    tasks: NormalizedPlaneTask[],
+    need: { modules: boolean; cycles: boolean },
+  ): Promise<NormalizedPlaneTask[]> {
+    const loadModules =
+      need.modules && tasks.some((task) => task.moduleIds.length === 0);
+    const loadCycles = need.cycles && tasks.some((task) => !task.cycleId);
+    if (!loadModules && !loadCycles) return tasks;
+
+    const modules = loadModules
+      ? await this.cachedModuleMembership(config, projectId)
+      : null;
+    const cycles = loadCycles
+      ? await this.cachedCycleMembership(config, projectId)
+      : null;
+    return attachMembership(tasks, modules, cycles);
+  }
+
+  private async cachedModuleMembership(
+    config: PlaneConfig,
+    projectId: string,
+  ): Promise<ModuleMembership> {
+    return withCache(
+      this.cacheManager,
+      this.cacheKey(config, ['membership-modules', projectId]),
+      PLANE_CACHE_TTL_MS,
+      async () => {
+        const modules = await this.cachedCollection(
+          config,
+          projectId,
+          'modules',
+          normalizeModule,
+        );
+        const map: ModuleMembership = {};
+        for (const moduleItem of modules) {
+          if (!ID_RE.test(moduleItem.id)) continue;
+          const url = joinPlaneUrl(
+            config.baseUrl,
+            `workspaces/${config.slug}/projects/${projectId}/modules/${moduleItem.id}/module-issues/?per_page=${PLANE_PAGE_SIZE}`,
+          );
+          const rows = await this.list(config, url);
+          for (const row of rows) {
+            const issueId = issueIdFromMembershipRow(row);
+            if (!issueId) continue;
+            const current = map[issueId] ?? [];
+            if (!current.includes(moduleItem.id)) current.push(moduleItem.id);
+            map[issueId] = current;
+          }
+        }
+        return map;
+      },
+    );
+  }
+
+  private async cachedCycleMembership(
+    config: PlaneConfig,
+    projectId: string,
+  ): Promise<CycleMembership> {
+    return withCache(
+      this.cacheManager,
+      this.cacheKey(config, ['membership-cycles', projectId]),
+      PLANE_CACHE_TTL_MS,
+      async () => {
+        const cycles = await this.cachedCollection(
+          config,
+          projectId,
+          'cycles',
+          normalizeCycle,
+        );
+        const map: CycleMembership = {};
+        for (const cycle of cycles) {
+          if (!ID_RE.test(cycle.id)) continue;
+          const url = joinPlaneUrl(
+            config.baseUrl,
+            `workspaces/${config.slug}/projects/${projectId}/cycles/${cycle.id}/cycle-issues/?per_page=${PLANE_PAGE_SIZE}`,
+          );
+          const rows = await this.list(config, url);
+          for (const row of rows) {
+            const issueId = issueIdFromMembershipRow(row);
+            if (!issueId || map[issueId]) continue;
+            map[issueId] = cycle.id;
+          }
+        }
+        return map;
+      },
+    );
+  }
+
   private async list(config: PlaneConfig, url: string): Promise<unknown[]> {
     return this.guard(() =>
       planeListAll({
@@ -565,6 +671,8 @@ export class PlaneService {
     const keys = [
       this.cacheKey(config, ['work-items', projectId]),
       this.cacheKey(config, ['issues', projectId]),
+      this.cacheKey(config, ['membership-modules', projectId]),
+      this.cacheKey(config, ['membership-cycles', projectId]),
     ];
     for (const key of keys) {
       try {

@@ -257,17 +257,17 @@ describe('Plane membership from module-issues and cycle-issues', () => {
     expect(byCycle.items.map((item) => item.id).sort()).toEqual(['p1', 'p2', 'v1']);
 
     const moduleQuery = await service.listWorkItems('lan@example.com', 'proj-flidoc', {
-      query: 'module = mod-vi',
+      query: 'module = "mod-vi"',
     });
     expect(moduleQuery.items.map((item) => item.id)).toEqual(['v1']);
 
     const cycleQuery = await service.listWorkItems('lan@example.com', 'proj-flidoc', {
-      query: 'cycle = cyc-sso',
+      query: 'cycle = "cyc-sso"',
     });
     expect(cycleQuery.items.map((item) => item.id)).toEqual(['s1']);
 
     const both = await service.listWorkItems('lan@example.com', 'proj-flidoc', {
-      query: 'module = mod-plane AND cycle = cyc-oct',
+      query: 'module = "mod-plane" AND cycle = "cyc-oct"',
     });
     expect(both.items.map((item) => item.id).sort()).toEqual(['p1', 'p2']);
   });
