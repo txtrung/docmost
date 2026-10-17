@@ -10,6 +10,7 @@ import {
   setZoom,
   updateBar,
   zoomForSpan,
+  zoomForWidth,
 } from '../../../../../packages/editor-ext/src/lib/plane-roadmap/model';
 
 function fresh() {
@@ -290,6 +291,15 @@ describe('mergeRoadmap zoom', () => {
     expect(manual.zoom).toBe('quarters');
     expect(manual.zoomManual).toBe(true);
     expect(manual.unscheduledCount).toBe(1);
+  });
+});
+
+describe('zoomForWidth', () => {
+  it('picks the finest zoom whose span and labels fit, and quarters when nothing fits', () => {
+    expect(zoomForWidth(29, 180, 3000)).toBe('days');
+    expect(zoomForWidth(29, 180, 1400)).toBe('weeks');
+    expect(zoomForWidth(29, 180, 500)).toBe('months');
+    expect(zoomForWidth(400, 180, 200)).toBe('quarters');
   });
 });
 

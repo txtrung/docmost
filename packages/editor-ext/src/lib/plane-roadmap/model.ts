@@ -1,6 +1,6 @@
 export type RoadmapSource = "plane" | "manual";
 export type RoadmapGrouping = "cycles" | "modules" | "workItems";
-export type RoadmapZoom = "weeks" | "months" | "quarters";
+export type RoadmapZoom = "days" | "weeks" | "months" | "quarters";
 export type RoadmapKind = "bar" | "milestone";
 
 export type RoadmapLink = {
@@ -343,18 +343,37 @@ export function zoomForSpan(start: string, end: string): RoadmapZoom {
   return "quarters";
 }
 
+export function roadmapDayWidth(zoom: RoadmapZoom): number {
+  if (zoom === "days") return 64;
+  if (zoom === "weeks") return 36;
+  if (zoom === "quarters") return 2;
+  return 8;
+}
+
+export function zoomForWidth(spanDays: number, extraPx: number, trackPx: number): RoadmapZoom {
+  const days = Math.max(1, spanDays);
+  const order: RoadmapZoom[] = ["days", "weeks", "months", "quarters"];
+  for (const zoom of order) {
+    if (days * roadmapDayWidth(zoom) + extraPx <= trackPx) return zoom;
+  }
+  return "quarters";
+}
+
+const PACK_ORIGIN = "2020-01-01";
+
 export function packRoadmapRows(
   laneIds: string[],
-  bars: { id: string; laneId: string; start: string; end: string; labelPx?: number }[],
+  bars: { id: string; laneId: string; start: string; end: string; labelPx?: number; barPx?: number }[],
   dayPx = 1,
 ): {
   lanes: { id: string; rowStart: number; rowCount: number }[];
-  bars: { id: string; row: number; laneRow: number }[];
+  bars: { id: string; row: number; laneRow: number; labelPx: number }[];
 } {
-  void dayPx;
+  const unit = dayPx > 0 ? dayPx : 1;
   const lanes: { id: string; rowStart: number; rowCount: number }[] = [];
-  const placed: { id: string; row: number; laneRow: number }[] = [];
+  const placed: { id: string; row: number; laneRow: number; labelPx: number }[] = [];
   let cursor = 0;
+  const startPx = (iso: string) => daysBetween(PACK_ORIGIN, iso) * unit;
   for (const laneId of laneIds) {
     const laneBars = bars
       .filter((bar) => bar.laneId === laneId)
@@ -364,22 +383,32 @@ export function packRoadmapRows(
         if (left.id !== right.id) return left.id < right.id ? -1 : 1;
         return 0;
       });
-    const rowEnds: string[] = [];
-    const local: { id: string; laneRow: number }[] = [];
+    const rowEnds: number[] = [];
+    const local: { id: string; laneRow: number; labelPx: number }[] = [];
     for (const bar of laneBars) {
-      let laneRow = rowEnds.findIndex((end) => end < bar.start);
+      const labelPx = Math.max(0, bar.labelPx ?? 0);
+      const spanPx =
+        bar.barPx ?? Math.max(unit, Math.max(1, daysBetween(bar.start, bar.end)) * unit);
+      const begin = startPx(bar.start);
+      const occupied = begin + spanPx + labelPx;
+      let laneRow = rowEnds.findIndex((end) => end <= begin);
       if (laneRow < 0) {
         laneRow = rowEnds.length;
-        rowEnds.push(bar.end);
+        rowEnds.push(occupied);
       } else {
-        rowEnds[laneRow] = bar.end;
+        rowEnds[laneRow] = occupied;
       }
-      local.push({ id: bar.id, laneRow });
+      local.push({ id: bar.id, laneRow, labelPx });
     }
     const rowCount = Math.max(1, rowEnds.length);
     lanes.push({ id: laneId, rowStart: cursor, rowCount });
     for (const bar of local) {
-      placed.push({ id: bar.id, laneRow: bar.laneRow, row: cursor + bar.laneRow });
+      placed.push({
+        id: bar.id,
+        laneRow: bar.laneRow,
+        row: cursor + bar.laneRow,
+        labelPx: bar.labelPx,
+      });
     }
     cursor += rowCount;
   }
@@ -714,7 +743,7 @@ function countOf(value: unknown): number {
 }
 
 function zoomOf(value: unknown): RoadmapZoom {
-  if (value === "weeks" || value === "quarters") return value;
+  if (value === "days" || value === "weeks" || value === "quarters") return value;
   return "months";
 }
 
