@@ -20,6 +20,8 @@ export interface TableOfContentsBlockAttributes {
   style?: TocStyle;
   numbered?: boolean;
   sticky?: boolean;
+  includePattern?: string;
+  excludePattern?: string;
 }
 
 declare module "@tiptap/core" {
@@ -79,6 +81,22 @@ export const TableOfContentsBlock = Node.create<TableOfContentsBlockOptions>({
           element.getAttribute("data-numbered") === "true",
         renderHTML: (attributes: TableOfContentsBlockAttributes) => ({
           "data-numbered": attributes.numbered ? "true" : "false",
+        }),
+      },
+      includePattern: {
+        default: "",
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute("data-include") || "",
+        renderHTML: (attributes: TableOfContentsBlockAttributes) => ({
+          "data-include": attributes.includePattern || "",
+        }),
+      },
+      excludePattern: {
+        default: "",
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute("data-exclude") || "",
+        renderHTML: (attributes: TableOfContentsBlockAttributes) => ({
+          "data-exclude": attributes.excludePattern || "",
         }),
       },
       sticky: {

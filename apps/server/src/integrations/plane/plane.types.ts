@@ -23,6 +23,7 @@ export type NormalizedPlaneTask = {
   startDate: string | null;
   dueDate: string | null;
   updatedAt: string | null;
+  createdAt: string | null;
   stateId: string | null;
   stateName: string | null;
   stateGroup: string | null;
@@ -83,6 +84,13 @@ export type PlaneFilterInput = {
   sort?: string;
   limit?: number;
   page?: number;
+  clauses?: PlaneClause[];
+};
+
+export type PlaneClause = {
+  field: string;
+  op: 'eq' | 'neq' | 'in';
+  values: string[];
 };
 
 export type PlaneRoadmapGrouping = 'cycles' | 'modules' | 'workItems';

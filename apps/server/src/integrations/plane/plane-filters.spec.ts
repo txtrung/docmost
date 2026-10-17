@@ -12,6 +12,7 @@ function task(overrides: Partial<NormalizedPlaneTask> = {}): NormalizedPlaneTask
     startDate: '2026-01-05',
     dueDate: '2026-01-20',
     updatedAt: '2026-01-10T00:00:00Z',
+    createdAt: '2026-01-01T00:00:00Z',
     stateId: 'state-started',
     stateName: 'In Progress',
     stateGroup: 'started',

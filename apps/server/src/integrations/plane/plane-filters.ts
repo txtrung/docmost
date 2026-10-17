@@ -1,4 +1,4 @@
-import { NormalizedPlaneTask, PlaneFilterInput } from './plane.types';
+import { NormalizedPlaneTask, PlaneClause, PlaneFilterInput } from './plane.types';
 
 const STRING_FIELDS = [
   'state',
@@ -102,6 +102,7 @@ function matchesAssignee(
 }
 
 function matches(item: NormalizedPlaneTask, filters: PlaneFilterInput, email: string): boolean {
+  if (filters.clauses) return clausesMatch(item, filters.clauses, email);
   if (filters.id && !same(item.id, filters.id)) return false;
   if (filters.state && !same(item.stateId, filters.state) && !same(item.stateName, filters.state)) {
     return false;
@@ -159,6 +160,49 @@ function matches(item: NormalizedPlaneTask, filters: PlaneFilterInput, email: st
   return true;
 }
 
+function clausesMatch(item: NormalizedPlaneTask, clauses: PlaneClause[], email: string): boolean {
+  return clauses.every((clause) => clauseMatches(item, clause, email));
+}
+
+function clauseMatches(item: NormalizedPlaneTask, clause: PlaneClause, email: string): boolean {
+  const values = clause.values.map((value) => value.toLowerCase());
+  const hit = values.some((value) => clauseValueHits(item, clause.field, value, email));
+  if (clause.op === 'neq') return !hit;
+  return hit;
+}
+
+function clauseValueHits(
+  item: NormalizedPlaneTask,
+  field: string,
+  value: string,
+  email: string,
+): boolean {
+  switch (field) {
+    case 'state':
+      return same(item.stateId, value) || same(item.stateName, value);
+    case 'stateGroup':
+      return same(item.stateGroup, value);
+    case 'priority':
+      return same(item.priority, value);
+    case 'assignee':
+      return matchesAssignee(item, value, email);
+    case 'label':
+      return item.labels.some((label) => same(label.id, value) || same(label.name, value));
+    case 'cycle':
+      return same(item.cycleId, value);
+    case 'module':
+      return item.moduleIds.some((moduleId) => same(moduleId, value));
+    case 'created':
+      return (item.createdAt ?? '').slice(0, 10) === value;
+    case 'updated':
+      return (item.updatedAt ?? '').slice(0, 10) === value;
+    case 'target':
+      return (item.dueDate ?? '') === value;
+    default:
+      return false;
+  }
+}
+
 function isNullish(value: string | number | null | undefined): boolean {
   return value === null || value === undefined || value === '';
 }
@@ -197,6 +241,8 @@ function compareTasks(
       return compareValues(left.startDate, right.startDate, desc);
     case 'updated':
       return compareValues(left.updatedAt, right.updatedAt, desc);
+    case 'created':
+      return compareValues(left.createdAt, right.createdAt, desc);
     case 'sequence':
       return compareValues(left.sequenceId, right.sequenceId, desc);
     case 'priority': {

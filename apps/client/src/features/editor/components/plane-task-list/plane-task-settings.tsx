@@ -8,6 +8,7 @@ import {
   Select,
   Stack,
   Text,
+  Textarea,
   TextInput,
 } from "@mantine/core";
 import { IconArrowDown, IconArrowUp } from "@tabler/icons-react";
@@ -47,6 +48,8 @@ export type PlaneTaskSettingsValue = {
   sort: string;
   limit: number;
   displayMode: PlaneDisplayMode;
+  filterMode: "form" | "query";
+  query: string;
 };
 
 type PlaneTaskSettingsProps = {
@@ -195,6 +198,27 @@ export default function PlaneTaskSettings({
         searchable
         nothingFoundMessage={t("No projects")}
       />
+      <SegmentedControl
+        fullWidth
+        size="xs"
+        value={value.filterMode}
+        onChange={(next) => patch({ filterMode: next === "query" ? "query" : "form" })}
+        data={[
+          { value: "form", label: t("Form") },
+          { value: "query", label: t("Query") },
+        ]}
+      />
+      {value.filterMode === "query" && (
+        <Textarea
+          label={t("Query")}
+          description={t("project = KEY AND state != Done AND assignee = currentUser() ORDER BY priority DESC")}
+          value={value.query}
+          minRows={3}
+          onChange={(event) => patch({ query: event.currentTarget.value })}
+        />
+      )}
+      {value.filterMode !== "query" && (
+      <>
       <Select
         label={t("State")}
         placeholder={t("All")}
@@ -314,6 +338,8 @@ export default function PlaneTaskSettings({
         onChange={(next) => patch({ sort: `${sortField || "updated"}:${next || "desc"}` })}
         allowDeselect={false}
       />
+      </>
+      )}
       <NumberInput
         label={t("Limit")}
         min={1}

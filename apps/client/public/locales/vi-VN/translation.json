@@ -1769,5 +1769,19 @@
   "Export PNG": "Xuất PNG",
   "Sub-lane": "Làn con",
   "Title is required.": "Cần có tiêu đề.",
-  "Link": "Liên kết"
+  "Link": "Liên kết",
+  "Form": "Biểu mẫu",
+  "Query": "Truy vấn",
+  "project = KEY AND state != Done AND assignee = currentUser() ORDER BY priority DESC": "project = KEY AND state != Done AND assignee = currentUser() ORDER BY priority DESC",
+  "Include headings": "Chỉ các tiêu đề",
+  "Exclude headings": "Bỏ các tiêu đề",
+  "Invalid pattern.": "Mẫu không hợp lệ.",
+  "Only one table of contents can be pinned.": "Chỉ ghim được một mục lục.",
+  "The query is empty.": "Truy vấn đang trống.",
+  "Expected a field after AND.": "Cần một trường sau AND.",
+  "Expected =, !=, or IN.": "Cần =, != hoặc IN.",
+  "Expected a value.": "Cần một giá trị.",
+  "Expected ) after the value list.": "Cần ) sau danh sách giá trị.",
+  "Expected ORDER BY and a field.": "Cần ORDER BY và một trường.",
+  "The query has text after ORDER BY.": "Còn chữ sau ORDER BY."
 }

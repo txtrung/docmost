@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { NodeViewProps, NodeViewWrapper, useEditorState } from "@tiptap/react";
 import {
   ActionIcon,
@@ -35,6 +35,7 @@ import {
 } from "@docmost/editor-ext";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { getPlaneProjects, getPlaneRoadmap, PlaneProject } from "../plane-task-list/plane-api";
+import { migrateRoadmap, readSharedRoadmap, roadmapMap, writeChangedRoadmap } from "./roadmap-y";
 import classes from "./plane-roadmap.module.css";
 
 type DragEdge = "move" | "start" | "end";
@@ -124,7 +125,10 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
   });
   const projectId = String(node.attrs.projectId || "");
   const grouping = groupingOf(node.attrs.grouping);
-  const model = readModel(String(node.attrs.data || "{}"), projectId, grouping);
+  const nodeId = String(node.attrs.id || "");
+  const fallback = readModel(String(node.attrs.data || "{}"), projectId, grouping);
+  const [shared, setShared] = useState<RoadmapModel | null>(null);
+  const model = shared ?? fallback;
   const [projects, setProjects] = useState<PlaneProject[]>([]);
   const [configured, setConfigured] = useState(true);
   const [error, setError] = useState("");
@@ -134,6 +138,41 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const zoom = isEditable ? model.zoom : viewerZoom;
   const markerId = useId().replace(/:/g, "");
+  const updateRef = useRef(updateAttributes);
+  updateRef.current = updateAttributes;
+  const fallbackRef = useRef(fallback);
+  fallbackRef.current = fallback;
+
+  useEffect(() => {
+    if (nodeId) return;
+    const handle = window.setTimeout(() => {
+      updateRef.current({ id: `rm${Math.random().toString(36).slice(2, 10)}` });
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, [nodeId]);
+
+  useEffect(() => {
+    if (!nodeId) return;
+    const map = roadmapMap(editor, nodeId);
+    if (!map) return;
+    const raw = String(node.attrs.data || "");
+    if (map.get("migrated") !== true) {
+      migrateRoadmap(map, raw, fallbackRef.current);
+      if (raw && raw !== "{}") updateRef.current({ data: "{}" });
+    }
+    const pull = () => {
+      const next = readSharedRoadmap(map, fallbackRef.current);
+      setShared((current) =>
+        current && JSON.stringify(current) === JSON.stringify(next) ? current : next,
+      );
+    };
+    const handle = window.setTimeout(pull, 0);
+    map.observeDeep(pull);
+    return () => {
+      window.clearTimeout(handle);
+      map.unobserveDeep(pull);
+    };
+  }, [editor, nodeId, node.attrs.data]);
 
   useEffect(() => {
     let active = true;
@@ -153,11 +192,15 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
   }, [t]);
 
   function commit(next: RoadmapModel) {
-    updateAttributes({
-      projectId: next.projectId,
-      grouping: next.grouping,
-      data: JSON.stringify(next),
-    });
+    const id = nodeId || `rm${Math.random().toString(36).slice(2, 10)}`;
+    const map = roadmapMap(editor, id);
+    if (map) writeChangedRoadmap(map, model, next);
+    const patch: Record<string, string> = {};
+    if (id !== nodeId) patch.id = id;
+    if (next.projectId !== projectId) patch.projectId = next.projectId;
+    if (next.grouping !== grouping) patch.grouping = next.grouping;
+    if (String(node.attrs.data || "{}") !== "{}") patch.data = "{}";
+    if (Object.keys(patch).length) updateAttributes(patch);
   }
 
   function sync(nextProjectId = model.projectId, nextGrouping = model.grouping) {

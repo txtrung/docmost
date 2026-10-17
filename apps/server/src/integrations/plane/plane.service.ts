@@ -37,6 +37,7 @@ import {
   normalizeWorkItem,
 } from './plane-normalize';
 import { filterPlaneWorkItems, sanitizePlaneFilters } from './plane-filters';
+import { parsePlaneQuery, projectClauseAllows, queryToFilters } from './plane-query';
 import { buildRoadmapFromPlane, mergeRoadmap } from '@docmost/editor-ext';
 import {
   NormalizedPlaneTask,
@@ -54,6 +55,13 @@ import { User } from '@docmost/db/types/entity.types';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const COLLECTION_TTL_MS = 10 * 60 * 1000;
+
+function readQuery(filters: unknown): string | null {
+  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) return null;
+  if (!Object.prototype.hasOwnProperty.call(filters, 'query')) return null;
+  const query = (filters as Record<string, unknown>).query;
+  return typeof query === 'string' ? query : '';
+}
 
 function parseCurrent(current: string | undefined): unknown {
   if (!current) return null;
@@ -181,6 +189,23 @@ export class PlaneService {
     const normalizedEmail = this.requireEmail(email);
     await this.assertMember(config, projectId, normalizedEmail);
     const tasks = await this.cachedWorkItems(config, projectId);
+    const query = readQuery(filters);
+    if (query !== null) {
+      const parsed = parsePlaneQuery(query);
+      if (parsed.ok === false) throw new BadRequestException(parsed.error);
+      const projects = await this.cachedProjects(config);
+      const identifier =
+        projects.find((project) => project.id === projectId)?.identifier ?? '';
+      if (!projectClauseAllows(parsed.value.clauses, projectId, identifier)) {
+        return { items: [], total: 0 };
+      }
+      const paging = sanitizePlaneFilters(filters);
+      return filterPlaneWorkItems(
+        tasks,
+        queryToFilters(parsed.value, paging.page, paging.limit),
+        normalizedEmail,
+      );
+    }
     return filterPlaneWorkItems(
       tasks,
       sanitizePlaneFilters(filters),

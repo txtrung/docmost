@@ -70,9 +70,14 @@ export default function PlaneTaskListView(props: NodeViewProps) {
   const columns = parsePlaneColumns(String(node.attrs.columns || ""));
   const sort = String(node.attrs.sort || "updated:desc");
   const limit = Number(node.attrs.limit) || 50;
+  const filterMode = node.attrs.filterMode === "query" ? "query" : "form";
+  const query = String(node.attrs.query || "");
   const [viewerSort, setViewerSort] = useState<string | null>(null);
   const activeSort = !isEditable && viewerSort ? viewerSort : sort;
-  const filterKey = `${projectId}|${node.attrs.filters}|${activeSort}|${limit}`;
+  const filterKey =
+    filterMode === "query"
+      ? `${projectId}|query|${query}|${limit}`
+      : `${projectId}|${node.attrs.filters}|${activeSort}|${limit}`;
   const [pageState, setPageState] = useState({ filterKey, page: 1 });
   const page = pageState.filterKey === filterKey ? pageState.page : 1;
   const pageId = String((editor.storage as { pageId?: string }).pageId || "");
@@ -117,7 +122,12 @@ export default function PlaneTaskListView(props: NodeViewProps) {
     let active = true;
     const timer = window.setTimeout(() => {
       setLoading(true);
-      getPlaneWorkItems(projectId, { ...filters, sort: activeSort, limit, page })
+      getPlaneWorkItems(
+        projectId,
+        filterMode === "query"
+          ? { query, page, limit }
+          : { ...filters, sort: activeSort, limit, page },
+      )
         .then((result) => {
           if (!active) return;
           setConfigured(result.configured);
@@ -146,7 +156,7 @@ export default function PlaneTaskListView(props: NodeViewProps) {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [projectId, node.attrs.filters, activeSort, limit, page, refreshToken, requestKey, t]);
+  }, [projectId, node.attrs.filters, filterMode, query, activeSort, limit, page, refreshToken, requestKey, t]);
 
   function toggleSort(column: string) {
     const field = SORT_FIELD[column];
@@ -166,6 +176,8 @@ export default function PlaneTaskListView(props: NodeViewProps) {
       sort: next.sort,
       limit: next.displayMode === "card" ? 1 : next.limit,
       displayMode: next.displayMode,
+      filterMode: next.filterMode,
+      query: next.query,
     });
   }
 
@@ -219,7 +231,16 @@ export default function PlaneTaskListView(props: NodeViewProps) {
                   <ScrollArea.Autosize mah={520} type="auto">
                     <PlaneTaskSettings
                       projects={projects}
-                      value={{ projectId, filters, columns, sort, limit, displayMode }}
+                      value={{
+                        projectId,
+                        filters,
+                        columns,
+                        sort,
+                        limit,
+                        displayMode,
+                        filterMode,
+                        query,
+                      }}
                       onChange={applySettings}
                     />
                   </ScrollArea.Autosize>

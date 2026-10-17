@@ -7,6 +7,7 @@ export interface PlaneRoadmapOptions {
 }
 
 export interface PlaneRoadmapAttributes {
+  id?: string;
   projectId?: string;
   grouping?: "cycles" | "modules" | "workItems";
   data?: string;
@@ -37,6 +38,13 @@ export const PlaneRoadmap = Node.create<PlaneRoadmapOptions>({
 
   addAttributes() {
     return {
+      id: {
+        default: "",
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-id") || "",
+        renderHTML: (attributes: PlaneRoadmapAttributes) => ({
+          "data-id": attributes.id || "",
+        }),
+      },
       projectId: {
         default: "",
         parseHTML: (element: HTMLElement) =>

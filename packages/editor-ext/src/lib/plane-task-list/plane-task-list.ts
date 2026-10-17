@@ -13,6 +13,8 @@ export interface PlaneTaskListAttributes {
   sort?: string;
   limit?: number;
   displayMode?: "table" | "card" | "count";
+  filterMode?: "form" | "query";
+  query?: string;
 }
 
 declare module "@tiptap/core" {
@@ -83,6 +85,21 @@ export const PlaneTaskList = Node.create<PlaneTaskListOptions>({
         },
         renderHTML: (attributes: PlaneTaskListAttributes) => ({
           "data-limit": String(attributes.limit || 50),
+        }),
+      },
+      filterMode: {
+        default: "form",
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute("data-filter-mode") === "query" ? "query" : "form",
+        renderHTML: (attributes: PlaneTaskListAttributes) => ({
+          "data-filter-mode": attributes.filterMode === "query" ? "query" : "form",
+        }),
+      },
+      query: {
+        default: "",
+        parseHTML: (element: HTMLElement) => element.getAttribute("data-query") || "",
+        renderHTML: (attributes: PlaneTaskListAttributes) => ({
+          "data-query": attributes.query || "",
         }),
       },
       displayMode: {

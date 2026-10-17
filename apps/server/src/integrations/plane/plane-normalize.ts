@@ -187,6 +187,7 @@ export function normalizeWorkItem(
     startDate: isoDate(text(record.start_date)),
     dueDate: isoDate(text(record.target_date)),
     updatedAt: text(record.updated_at) || null,
+    createdAt: text(record.created_at) || null,
     stateId: stateId || null,
     stateName: stateRecord ? text(stateRecord.name) || null : null,
     stateGroup: stateRecord ? text(stateRecord.group) || null : null,

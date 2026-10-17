@@ -10,6 +10,7 @@ import {
   Select,
   Switch,
   Text,
+  TextInput,
   Title,
   ActionIcon,
   Tooltip,
@@ -52,8 +53,32 @@ function headingNumbers(levels: number[]): string[] {
   });
 }
 
+function patternTest(pattern: string, label: string): boolean {
+  try {
+    return new RegExp(pattern, "i").test(label);
+  } catch {
+    return false;
+  }
+}
+
+function patternAllows(include: string, exclude: string, label: string): boolean {
+  if (include.trim() && !patternTest(include, label)) return false;
+  if (exclude.trim() && patternTest(exclude, label)) return false;
+  return true;
+}
+
+function validPattern(value: string): boolean {
+  if (!value.trim()) return true;
+  try {
+    new RegExp(value, "i");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function TableOfContentsBlockView(props: NodeViewProps) {
-  const { editor, node, updateAttributes } = props;
+  const { editor, node, updateAttributes, getPos } = props;
   const { t } = useTranslation();
   const isEditable = useEditorState({
     editor,
@@ -63,11 +88,27 @@ export default function TableOfContentsBlockView(props: NodeViewProps) {
   const style: TocStyle = node.attrs.style === "flat" ? "flat" : "list";
   const numbered = Boolean(node.attrs.numbered);
   const sticky = Boolean(node.attrs.sticky);
+  const includePattern = String(node.attrs.includePattern || "");
+  const excludePattern = String(node.attrs.excludePattern || "");
+  const myPos = typeof getPos === "function" ? getPos() : null;
+  let ownerPos: number | null = null;
+  editor.state.doc.descendants((child, pos) => {
+    if (ownerPos !== null) return false;
+    if (child.type.name === "tableOfContents" && child.attrs.sticky) {
+      ownerPos = pos;
+      return false;
+    }
+    return true;
+  });
+  const pinned = sticky && myPos !== null && myPos === ownerPos;
   const [links, setLinks] = useState<HeadingLink[]>([]);
   const [activeElement, setActiveElement] = useState<HTMLElement | null>(null);
   const headerPaddingRef = useRef<HTMLDivElement | null>(null);
   const visible = links.filter(
-    (link) => link.level >= minLevel && link.level <= maxLevel,
+    (link) =>
+      link.level >= minLevel &&
+      link.level <= maxLevel &&
+      patternAllows(includePattern, excludePattern, link.label),
   );
   const numbers = numbered ? headingNumbers(visible.map((link) => link.level)) : [];
 
@@ -129,6 +170,8 @@ export default function TableOfContentsBlockView(props: NodeViewProps) {
     style?: TocStyle;
     numbered?: boolean;
     sticky?: boolean;
+    includePattern?: string;
+    excludePattern?: string;
   }) {
     let nextMin = patch.minLevel ?? minLevel;
     let nextMax = patch.maxLevel ?? maxLevel;
@@ -141,6 +184,8 @@ export default function TableOfContentsBlockView(props: NodeViewProps) {
       maxLevel: nextMax,
       style: patch.style ?? style,
       numbered: patch.numbered ?? numbered,
+      ...(patch.includePattern !== undefined ? { includePattern: patch.includePattern } : {}),
+      ...(patch.excludePattern !== undefined ? { excludePattern: patch.excludePattern } : {}),
       sticky: patch.sticky ?? sticky,
     });
   }
@@ -158,7 +203,7 @@ export default function TableOfContentsBlockView(props: NodeViewProps) {
   );
 
   const floating =
-    sticky && typeof document !== "undefined"
+    pinned && typeof document !== "undefined"
       ? createPortal(
           <div className={classes.stickyPanel} contentEditable={false}>
             <Title order={2} size="h6" fw={500} mb="xs">
@@ -173,13 +218,13 @@ export default function TableOfContentsBlockView(props: NodeViewProps) {
   return (
     <NodeViewWrapper data-drag-handle className={classes.anchor}>
       <div contentEditable={false}>
-        <Group justify="space-between" mb={sticky ? 0 : "xs"} wrap="nowrap">
-          {!sticky && (
+        <Group justify="space-between" mb={pinned ? 0 : "xs"} wrap="nowrap">
+          {!pinned && (
             <Title order={2} size="h6" fw={500}>
               {t("Table of contents")}
             </Title>
           )}
-          {sticky && (
+          {pinned && (
             <Text size="sm" c="dimmed">
               {t("Pinned table of contents")}
             </Text>
@@ -191,11 +236,18 @@ export default function TableOfContentsBlockView(props: NodeViewProps) {
               style={style}
               numbered={numbered}
               sticky={sticky}
+              includePattern={includePattern}
+              excludePattern={excludePattern}
               onChange={write}
             />
           )}
         </Group>
-        {!sticky && outline}
+        {sticky && !pinned && (
+          <Text size="xs" c="dimmed" mb="xs">
+            {t("Only one table of contents can be pinned.")}
+          </Text>
+        )}
+        {!pinned && outline}
         <div ref={headerPaddingRef} className={linkClasses.headerPadding} />
         {floating}
       </div>
@@ -268,6 +320,8 @@ function TocSettings({
   style,
   numbered,
   sticky,
+  includePattern,
+  excludePattern,
   onChange,
 }: {
   minLevel: number;
@@ -275,14 +329,20 @@ function TocSettings({
   style: TocStyle;
   numbered: boolean;
   sticky: boolean;
+  includePattern: string;
+  excludePattern: string;
   onChange: (patch: {
     minLevel?: number;
     maxLevel?: number;
     style?: TocStyle;
     numbered?: boolean;
     sticky?: boolean;
+    includePattern?: string;
+    excludePattern?: string;
   }) => void;
 }) {
+  const [includeError, setIncludeError] = useState(false);
+  const [excludeError, setExcludeError] = useState(false);
   const { t } = useTranslation();
   const levelData = LEVELS.map((level) => ({
     value: level,
@@ -339,6 +399,38 @@ function TocSettings({
           label={t("Number headings")}
           checked={numbered}
           onChange={(event) => onChange({ numbered: event.currentTarget.checked })}
+        />
+        <TextInput
+          label={t("Include headings")}
+          defaultValue={includePattern}
+          key={`include:${includePattern}`}
+          error={includeError ? t("Invalid pattern.") : undefined}
+          mb="xs"
+          onBlur={(event) => {
+            const value = event.currentTarget.value;
+            if (!validPattern(value)) {
+              setIncludeError(true);
+              return;
+            }
+            setIncludeError(false);
+            if (value !== includePattern) onChange({ includePattern: value });
+          }}
+        />
+        <TextInput
+          label={t("Exclude headings")}
+          defaultValue={excludePattern}
+          key={`exclude:${excludePattern}`}
+          error={excludeError ? t("Invalid pattern.") : undefined}
+          mb="xs"
+          onBlur={(event) => {
+            const value = event.currentTarget.value;
+            if (!validPattern(value)) {
+              setExcludeError(true);
+              return;
+            }
+            setExcludeError(false);
+            if (value !== excludePattern) onChange({ excludePattern: value });
+          }}
         />
         <Switch
           size="sm"

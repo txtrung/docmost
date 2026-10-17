@@ -92,7 +92,12 @@ export function getPlaneProjects() {
 
 export function getPlaneWorkItems(
   projectId: string,
-  filters: PlaneTaskFilters & { sort?: string; limit?: number; page?: number },
+  filters: PlaneTaskFilters & {
+    sort?: string;
+    limit?: number;
+    page?: number;
+    query?: string;
+  },
 ) {
   return post<Configured<{ items: PlaneTask[]; total: number }>>(
     "/plane/work-items",

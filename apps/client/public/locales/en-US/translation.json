@@ -1769,5 +1769,19 @@
   "Export PNG": "Export PNG",
   "Sub-lane": "Sub-lane",
   "Title is required.": "Title is required.",
-  "Link": "Link"
+  "Link": "Link",
+  "Form": "Form",
+  "Query": "Query",
+  "project = KEY AND state != Done AND assignee = currentUser() ORDER BY priority DESC": "project = KEY AND state != Done AND assignee = currentUser() ORDER BY priority DESC",
+  "Include headings": "Include headings",
+  "Exclude headings": "Exclude headings",
+  "Invalid pattern.": "Invalid pattern.",
+  "Only one table of contents can be pinned.": "Only one table of contents can be pinned.",
+  "The query is empty.": "The query is empty.",
+  "Expected a field after AND.": "Expected a field after AND.",
+  "Expected =, !=, or IN.": "Expected =, !=, or IN.",
+  "Expected a value.": "Expected a value.",
+  "Expected ) after the value list.": "Expected ) after the value list.",
+  "Expected ORDER BY and a field.": "Expected ORDER BY and a field.",
+  "The query has text after ORDER BY.": "The query has text after ORDER BY."
 }

@@ -1,6 +1,6 @@
 # Plane Community integration
 
-Docmost reads work items from a self-hosted Plane Community instance and shows them in the editor. The module uses Plane's REST API. It does not use Plane Query Language.
+Docmost reads work items from a self-hosted Plane Community instance and shows them in the editor. The module uses Plane's REST API. The task block can also filter with a small query (`=`, `!=`, `IN`, `AND`, `ORDER BY`). Docmost parses that query. It is not Plane Query Language, and it is not sent to Plane.
 
 The integration stays off until all three environment variables are set. Docmost still starts without them.
 
@@ -40,11 +40,11 @@ Lists page with `cursor` and `per_page` of 100. Docmost reads at most 10 pages (
 
 ## Editor
 
-**Table of contents** inserts a live outline of the page headings. The settings choose the minimum and maximum heading level, a list or a one-line layout, numbering, and a pinned outline on the side of the page. A click scrolls to the heading.
+**Table of contents** inserts a live outline of the page headings. The settings choose the minimum and maximum heading level, a list or a one-line layout, numbering, include and exclude patterns, and a pinned outline on the side of the page. A pattern is a regular expression, so a plain keyword works, and an invalid pattern is rejected. Only the first pinned block on the page becomes the side panel. A later pin stays in the page. A click scrolls to the heading.
 
-**Plane tasks** inserts a `planeTaskList` block. A modal sets the project, filters, column order, and a table, card, or count layout. Pasting a Plane project or work-item URL from the same origin offers to insert the block. A card layout shows one work item. The footer shows the match count and the local time of the last refresh. Table headers sort the list. Previous and Next move through pages of the configured limit. Assignee cells use the Plane avatar URL when it is an http or https address, and initials otherwise. An editor who can edit the page and who is a member of the project can create a work item from the block. That is the only write. The server keeps the API key and drops the Redis list for that project after a successful create.
+**Plane tasks** inserts a `planeTaskList` block. A modal sets the project, column order, and a table, card, or count layout. Form and Query are separate. The request sends the active mode and ignores the other. The query fields are project, state, state_group, priority, assignee, label, cycle, module, created, updated, and target. `currentUser()` is the signed-in member. A broken query returns the parser message in the block. Pasting a Plane project or work-item URL from the same origin offers to insert the block. A card layout shows one work item. The footer shows the match count and the local time of the last refresh. In form mode, table headers sort the list. Previous and Next move through pages of the configured limit. Assignee cells use the Plane avatar URL when it is an http or https address, and initials otherwise. An editor who can edit the page and who is a member of the project can create a work item from the block. That is the only write. The server keeps the API key and drops the Redis list for that project after a successful create.
 
-**Plane roadmap** inserts a `planeRoadmap` timeline. Sync from Plane fills lanes from modules, cycles, or dated work items. Bars and milestones can be dragged, renamed, recolored, added, and removed. A lane can hold one level of sub-lanes. A bar can depend on other bars, which draws an arrow, and can store a Docmost page link or a Plane work-item link. Export PNG downloads a snapshot of the current timeline. Each item is `plane` or `manual`. Sync refreshes Plane items and keeps manual items, edited Plane items, and deletions. A dependency that points at a missing bar is dropped. Viewers get the same timeline without the edit controls. Zoom can be weeks, months, or quarters.
+**Plane roadmap** inserts a `planeRoadmap` timeline. Sync from Plane fills lanes from modules, cycles, or dated work items. Bars and milestones can be dragged, renamed, recolored, added, and removed. A lane can hold one level of sub-lanes. A bar can depend on other bars, which draws an arrow, and can store a Docmost page link or a Plane work-item link. Export PNG downloads a snapshot of the current timeline. Each item is `plane` or `manual`. Sync refreshes Plane items and keeps manual items, edited Plane items, and deletions. A dependency that points at a missing bar is dropped. The timeline lives in the page Yjs document, with one map per lane and one map per bar, so two people can edit different bars at the same time. An older roadmap that still stores its model in the JSON attribute is copied into that document on load, and the JSON copy is then cleared. Viewers get the same timeline without the edit controls. Zoom can be weeks, months, or quarters.
 
 An older page may still contain a Mermaid gantt snapshot. That diagram still renders. It no longer has a regenerate action.
 
@@ -56,9 +56,9 @@ Filters and the roadmap only see the first 1000 work items in the cached list.
 
 A work item in several modules is drawn in the first module.
 
-The roadmap is one JSON attribute. Two people editing it at once keep the last write.
+The query does not support `OR`, comparison operators, or functions other than `currentUser()`.
 
-Pinned tables of contents share one fixed panel, so two pinned blocks overlap.
+Sub-lanes nest one level. Export PNG is a snapshot of the bars on screen.
 
 Static HTML and Markdown export keep the node and do not expand live Plane rows or a live table of contents.
 
