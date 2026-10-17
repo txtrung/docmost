@@ -29,7 +29,16 @@ export function issueIdFromMembershipRow(row: unknown): string | null {
   if (workItemText) return workItemText;
 
   const workItemId = text(record(entry.work_item)?.id) || text(entry.work_item_id);
-  return workItemId || null;
+  if (workItemId) return workItemId;
+
+  if (!usesOwnId(entry)) return null;
+  return text(entry.id) || null;
+}
+
+function usesOwnId(entry: Record<string, unknown>): boolean {
+  const throughTable = 'module' in entry || 'cycle' in entry;
+  const issueShaped = 'name' in entry || 'sequence_id' in entry;
+  return issueShaped || !throughTable;
 }
 
 export function attachMembership(

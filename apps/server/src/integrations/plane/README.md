@@ -38,7 +38,7 @@ Plane responses sit in Redis for 60 seconds. The work-item collection name (`wor
 
 Lists page with `cursor` and `per_page` of 100. Docmost reads at most 10 pages (1000 records) per resource before filters run.
 
-Plane Community's work-item serializer omits module and cycle membership. Those links live on `module-issues` and `cycle-issues`. Docmost loads a map only when a roadmap groups by module or cycle, or a filter or query uses `module` or `cycle`, and only when a work item is missing that field. Each module or cycle is one paged request. The maps use the same 60 second cache as the work-item list. A payload that already has `module_ids` or `cycle_id` keeps those values.
+Plane Community's work-item serializer omits module and cycle membership. Those links live on `module-issues` and `cycle-issues`. Each result is a work item, and its `id` is the work item id. A through-table row that names `issue` is still accepted, and that row's own id is not. Docmost loads a map only when a roadmap groups by module or cycle, or a filter or query uses `module` or `cycle`, and only when a work item is missing that field. Each module or cycle is one paged request. The maps use the same 60 second cache as the work-item list. A payload that already has `module_ids` or `cycle_id` keeps those values.
 
 ## Editor
 
