@@ -1,4 +1,5 @@
 import { Cache } from 'cache-manager';
+import { issueIdFromMembershipRow } from './plane-membership';
 import { PlaneService } from './plane.service';
 
 type Json = Record<string, unknown>;
@@ -42,53 +43,56 @@ const embeddedIssues = [
   }),
 ];
 
-function membershipRow(issueId: string, containerId: string, shape: 'string' | 'object' | 'detail'): Json {
-  if (shape === 'object') {
-    return { id: `${containerId}-${issueId}`, issue: { id: issueId } };
-  }
-  if (shape === 'detail') {
-    return { id: `${containerId}-${issueId}`, issue_detail: { id: issueId } };
-  }
+function envelope(results: Json[], cursor: string | null) {
   return {
-    id: `${containerId}-${issueId}`,
-    issue: issueId,
-    issue_detail: { id: issueId },
+    grouped_by: null,
+    sub_grouped_by: null,
+    total_count: results.length,
+    next_cursor: cursor ?? '',
+    prev_cursor: '',
+    next_page_results: Boolean(cursor),
+    prev_page_results: false,
+    count: results.length,
+    total_pages: cursor ? 2 : 1,
+    total_results: results.length,
+    extra_stats: null,
+    results,
   };
-}
-
-function page(results: Json[], cursor: string | null) {
-  if (cursor) {
-    return { results, next_cursor: cursor, next_page_results: true };
-  }
-  return { results, next_page_results: false };
 }
 
 function moduleIssues(moduleId: string, cursor: string | null) {
   if (moduleId === 'mod-plane' && !cursor) {
-    return page([membershipRow('p1', 'mod-plane', 'string')], 'page-2');
+    return envelope([issue('p1', 'Plane API', '2026-10-15', '2026-10-15', 1)], 'page-2');
   }
   if (moduleId === 'mod-plane' && cursor === 'page-2') {
-    return page([membershipRow('p2', 'mod-plane', 'string')], null);
+    return envelope([issue('p2', 'Sync tasks', '2026-10-15', '2026-10-15', 2)], null);
   }
-  if (moduleId === 'mod-vi') return page([membershipRow('v1', 'mod-vi', 'object')], null);
-  if (moduleId === 'mod-sso') return page([membershipRow('s1', 'mod-sso', 'detail')], null);
-  if (moduleId === 'mod-kept') return page([membershipRow('e1', 'mod-other', 'string')], null);
-  return page([], null);
+  if (moduleId === 'mod-vi') {
+    return envelope([issue('v1', 'Brand', '2026-10-15', '2026-10-15', 3)], null);
+  }
+  if (moduleId === 'mod-sso') {
+    return envelope([issue('s1', 'SSO button', '2026-11-03', '2026-11-05', 4)], null);
+  }
+  return envelope([], null);
 }
 
 function cycleIssues(cycleId: string, cursor: string | null) {
   if (cycleId === 'cyc-oct' && !cursor) {
-    return page([membershipRow('p1', 'cyc-oct', 'string')], 'page-2');
+    return envelope([issue('p1', 'Plane API', '2026-10-15', '2026-10-15', 1)], 'page-2');
   }
   if (cycleId === 'cyc-oct' && cursor === 'page-2') {
-    return page(
-      [membershipRow('p2', 'cyc-oct', 'object'), membershipRow('v1', 'cyc-oct', 'detail')],
+    return envelope(
+      [
+        issue('p2', 'Sync tasks', '2026-10-15', '2026-10-15', 2),
+        issue('v1', 'Brand', '2026-10-15', '2026-10-15', 3),
+      ],
       null,
     );
   }
-  if (cycleId === 'cyc-sso') return page([membershipRow('s1', 'cyc-sso', 'string')], null);
-  if (cycleId === 'cyc-kept') return page([membershipRow('e1', 'cyc-other', 'string')], null);
-  return page([], null);
+  if (cycleId === 'cyc-sso') {
+    return envelope([issue('s1', 'SSO button', '2026-11-03', '2026-11-05', 4)], null);
+  }
+  return envelope([], null);
 }
 
 function respond(url: string, method: string): { status: number; body: unknown } {
@@ -317,5 +321,36 @@ describe('Plane membership from module-issues and cycle-issues', () => {
 
     await service.buildRoadmap('lan@example.com', 'proj-flidoc', 'workItems', undefined);
     expect(membershipUrls()).toEqual([]);
+  });
+});
+
+describe('issueIdFromMembershipRow', () => {
+  it('reads the work item id from a Plane issue object', () => {
+    expect(
+      issueIdFromMembershipRow({
+        id: 'p1',
+        name: 'Plane API',
+        sequence_id: 1,
+        priority: 'medium',
+        project: 'proj-flidoc',
+        state: 'state1',
+        start_date: '2026-10-15',
+        target_date: '2026-10-15',
+      }),
+    ).toBe('p1');
+  });
+
+  it('reads a through-table row from issue, not from the row id', () => {
+    expect(
+      issueIdFromMembershipRow({ id: 'join-1', issue: 'p1', module: 'mod-plane' }),
+    ).toBe('p1');
+    expect(
+      issueIdFromMembershipRow({ id: 'join-2', issue: { id: 'p2' }, module: 'mod-plane' }),
+    ).toBe('p2');
+    expect(
+      issueIdFromMembershipRow({ id: 'join-3', issue_detail: { id: 's1' }, cycle: 'cyc-sso' }),
+    ).toBe('s1');
+    expect(issueIdFromMembershipRow({ id: 'join-4', module: 'mod-plane' })).toBeNull();
+    expect(issueIdFromMembershipRow({ id: 'join-5', cycle: 'cyc-oct' })).toBeNull();
   });
 });
