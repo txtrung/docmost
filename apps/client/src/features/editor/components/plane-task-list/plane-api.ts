@@ -11,6 +11,7 @@ export type PlanePerson = {
   id: string;
   email: string;
   name: string;
+  avatarUrl: string | null;
 };
 
 export type PlaneLabel = {
@@ -91,7 +92,7 @@ export function getPlaneProjects() {
 
 export function getPlaneWorkItems(
   projectId: string,
-  filters: PlaneTaskFilters & { sort?: string; limit?: number },
+  filters: PlaneTaskFilters & { sort?: string; limit?: number; page?: number },
 ) {
   return post<Configured<{ items: PlaneTask[]; total: number }>>(
     "/plane/work-items",
@@ -113,6 +114,17 @@ export function getPlaneCycles(projectId: string) {
 
 export function getPlaneModules(projectId: string) {
   return post<Configured<{ items: PlaneModule[] }>>("/plane/modules", { projectId });
+}
+
+export function createPlaneWorkItem(input: {
+  pageId: string;
+  projectId: string;
+  title: string;
+  stateId?: string;
+  priority?: string;
+  assigneeId?: string;
+}) {
+  return post<Configured<{ item: PlaneTask | null }>>("/plane/work-items/create", input);
 }
 
 export function getPlaneMembers(projectId: string) {

@@ -7,6 +7,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -23,8 +24,10 @@ import {
   detectWorkItemCollection,
   joinPlaneUrl,
   planeListAll,
+  planeRequest,
 } from './plane-http';
 import {
+  buildWorkItemPayload,
   normalizeCycle,
   normalizeLabelRecord,
   normalizeModule,
@@ -45,6 +48,9 @@ import {
   PlaneRoadmapGrouping,
   PlaneState,
 } from './plane.types';
+import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { PageAccessService } from '../../core/page/page-access/page-access.service';
+import { User } from '@docmost/db/types/entity.types';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const COLLECTION_TTL_MS = 10 * 60 * 1000;
@@ -72,6 +78,8 @@ export class PlaneService {
   constructor(
     private readonly environmentService: EnvironmentService,
     private readonly outbound: OutboundAgentFactory,
+    private readonly pageRepo: PageRepo,
+    private readonly pageAccess: PageAccessService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -97,6 +105,74 @@ export class PlaneService {
     }
 
     return visible;
+  }
+
+  async createWorkItem(
+    user: User,
+    input: {
+      pageId: string;
+      projectId: string;
+      title: string;
+      stateId?: string;
+      priority?: string;
+      assigneeId?: string;
+    },
+  ): Promise<NormalizedPlaneTask> {
+    const config = this.requireConfig();
+    this.assertId(input.pageId);
+    this.assertId(input.projectId);
+    if (input.stateId) this.assertId(input.stateId);
+    if (input.assigneeId) this.assertId(input.assigneeId);
+    const title = input.title.trim();
+    if (!title) throw new BadRequestException('Title is required.');
+
+    const page = await this.pageRepo.findById(input.pageId);
+    if (!page) throw new NotFoundException('Page not found.');
+    await this.pageAccess.validateCanEdit(page, user);
+
+    const email = this.requireEmail(user.email);
+    await this.assertMember(config, input.projectId, email);
+    const collection = await this.resolveCollection(config, input.projectId);
+    const url = joinPlaneUrl(
+      config.baseUrl,
+      `workspaces/${config.slug}/projects/${input.projectId}/${collection}/`,
+    );
+    const { status, body } = await this.guard(() =>
+      planeRequest({
+        url,
+        apiKey: config.apiKey,
+        fetchImpl: this.fetchImpl,
+        method: 'POST',
+        body: buildWorkItemPayload({
+          title,
+          stateId: input.stateId,
+          priority: input.priority,
+          assigneeId: input.assigneeId,
+        }),
+        retry: false,
+      }),
+    );
+    if (status === 429) {
+      throw new HttpException('Plane rate limit exceeded.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    if (status === 404) {
+      throw new ForbiddenException('You do not have access to this Plane project.');
+    }
+    if (status < 200 || status >= 300) {
+      throw new BadGatewayException('Plane request failed.');
+    }
+
+    await this.dropWorkItemCache(config, input.projectId);
+    const projects = await this.cachedProjects(config);
+    const item = normalizeWorkItem(body, {
+      origin: config.origin,
+      workspace: config.slug,
+      projectId: input.projectId,
+      projectIdentifier:
+        projects.find((project) => project.id === input.projectId)?.identifier ?? '',
+    });
+    if (!item) throw new BadGatewayException('Plane request failed.');
+    return item;
   }
 
   async listWorkItems(email: string, projectId: string, filters: unknown) {
@@ -383,6 +459,8 @@ export class PlaneService {
     const lease = await this.outbound.lease(url);
     try {
       return await fetch(url, {
+        method: init.method,
+        body: init.body,
         headers: init.headers,
         dispatcher: lease.dispatcher,
       } as RequestInit);
@@ -455,6 +533,20 @@ export class PlaneService {
   private assertId(id: string) {
     if (!ID_RE.test(id)) {
       throw new BadRequestException('Invalid Plane id.');
+    }
+  }
+
+  private async dropWorkItemCache(config: PlaneConfig, projectId: string) {
+    const keys = [
+      this.cacheKey(config, ['work-items', projectId]),
+      this.cacheKey(config, ['issues', projectId]),
+    ];
+    for (const key of keys) {
+      try {
+        await this.cacheManager.del(key);
+      } catch (error) {
+        this.logger.warn(`Plane cache delete failed: ${error}`);
+      }
     }
   }
 

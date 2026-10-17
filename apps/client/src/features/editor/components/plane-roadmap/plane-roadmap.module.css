@@ -2,6 +2,22 @@
   overflow-x: auto;
 }
 
+.chart {
+  position: relative;
+}
+
+.arrows {
+  position: absolute;
+  left: 180px;
+  top: 22px;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.subLane {
+  padding-left: 18px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);

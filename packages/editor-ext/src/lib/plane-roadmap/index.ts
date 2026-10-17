@@ -18,6 +18,7 @@ export {
   type RoadmapGrouping,
   type RoadmapKind,
   type RoadmapLane,
+  type RoadmapLink,
   type RoadmapModel,
   type RoadmapPlaneItem,
   type RoadmapPlaneLane,

@@ -1761,5 +1761,13 @@
   "Failed to load the roadmap.": "Không tải được lộ trình.",
   "This roadmap is not set up.": "Lộ trình này chưa được thiết lập.",
   "No lanes yet.": "Chưa có làn nào.",
-  "Bar": "Thanh"
+  "Bar": "Thanh",
+  "Create work item": "Tạo hạng mục",
+  "Page {{page}}": "Trang {{page}}",
+  "Add sub-lane": "Thêm làn con",
+  "Depends on": "Phụ thuộc",
+  "Export PNG": "Xuất PNG",
+  "Sub-lane": "Làn con",
+  "Title is required.": "Cần có tiêu đề.",
+  "Link": "Liên kết"
 }

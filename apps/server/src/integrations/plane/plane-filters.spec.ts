@@ -16,7 +16,7 @@ function task(overrides: Partial<NormalizedPlaneTask> = {}): NormalizedPlaneTask
     stateName: 'In Progress',
     stateGroup: 'started',
     stateColor: '#ff0',
-    assignees: [{ id: 'user-1', email: 'Lan@Example.com', name: 'Lan' }],
+    assignees: [{ id: 'user-1', email: 'Lan@Example.com', name: 'Lan', avatarUrl: null }],
     labels: [{ id: 'label-1', name: 'Docs', color: '#0f0' }],
     cycleId: 'cycle-1',
     moduleIds: ['module-1'],
@@ -57,7 +57,7 @@ describe('filterPlaneWorkItems', () => {
       stateId: 'state-done',
       stateName: 'Done',
       stateGroup: 'completed',
-      assignees: [{ id: 'user-2', email: 'other@example.com', name: 'Other' }],
+      assignees: [{ id: 'user-2', email: 'other@example.com', name: 'Other', avatarUrl: null }],
       labels: [{ id: 'label-2', name: 'Bug', color: '#f00' }],
       cycleId: 'cycle-2',
       moduleIds: ['module-2'],
@@ -144,6 +144,16 @@ describe('filterPlaneWorkItems', () => {
     const result = filterPlaneWorkItems(items, { limit: 1, sort: 'sequence:asc' }, '');
     expect(result.total).toBe(3);
     expect(result.items.map((item) => item.id)).toEqual(['task-1']);
+  });
+
+  it('returns the requested page and keeps the full match count', () => {
+    const result = filterPlaneWorkItems(
+      items,
+      { limit: 1, page: 2, sort: 'sequence:asc' },
+      '',
+    );
+    expect(result.total).toBe(3);
+    expect(result.items.map((item) => item.id)).toEqual(['task-2']);
   });
 
   it('defaults the limit to 50', () => {

@@ -20,7 +20,12 @@ export type PlaneFetchResponse = {
 
 export type PlaneFetch = (
   url: string,
-  init: { headers: Record<string, string>; dispatcher?: unknown },
+  init: {
+    headers: Record<string, string>;
+    method?: string;
+    body?: string;
+    dispatcher?: unknown;
+  },
 ) => Promise<PlaneFetchResponse>;
 
 export type WorkItemCollection = 'work-items' | 'issues';
@@ -108,25 +113,33 @@ export async function planeRequest(options: {
   url: string;
   apiKey: string;
   fetchImpl: PlaneFetch;
+  method?: string;
+  body?: unknown;
   dispatcher?: unknown;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  retry?: boolean;
 }): Promise<{ status: number; body: unknown }> {
   const sleep =
     options.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   const now = options.now ?? (() => Date.now());
+  const method = options.method ?? 'GET';
+  const retry = options.retry !== false && method === 'GET';
 
   const call = () =>
     options.fetchImpl(options.url, {
+      method,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
       headers: {
         Accept: 'application/json',
+        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
         'X-API-Key': options.apiKey,
       },
       dispatcher: options.dispatcher,
     });
 
   let response = await call();
-  if (response.status === 429) {
+  if (retry && response.status === 429) {
     const wait = parseRetryAfterMs(response.headers.get('retry-after'), now());
     await sleep(wait);
     response = await call();

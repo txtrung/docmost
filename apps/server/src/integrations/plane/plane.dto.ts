@@ -1,4 +1,10 @@
-import { IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { PlaneRoadmapGrouping } from './plane.types';
 
 export class PlaneProjectDto {
@@ -21,6 +27,30 @@ export class PlaneRoadmapDto extends PlaneProjectDto {
   @IsString()
   @MaxLength(200000)
   current?: string;
+}
+
+export class PlaneCreateWorkItemDto extends PlaneProjectDto {
+  @IsString()
+  @MaxLength(64)
+  pageId: string;
+
+  @IsString()
+  @MaxLength(200)
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  stateId?: string;
+
+  @IsOptional()
+  @IsIn(['urgent', 'high', 'medium', 'low', 'none'])
+  priority?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  assigneeId?: string;
 }
 
 export class PlaneParseUrlDto {

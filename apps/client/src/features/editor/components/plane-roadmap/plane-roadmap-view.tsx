@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { NodeViewProps, NodeViewWrapper, useEditorState } from "@tiptap/react";
 import {
   ActionIcon,
+  Anchor,
   Button,
   Group,
   Popover,
@@ -11,7 +12,7 @@ import {
   TextInput,
   Tooltip,
 } from "@mantine/core";
-import { IconPlus, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconDownload, IconPlus, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import {
   ROADMAP_COLORS,
@@ -132,6 +133,7 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
   const [preview, setPreview] = useState<{ id: string; start: string; end: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const zoom = isEditable ? model.zoom : viewerZoom;
+  const markerId = useId().replace(/:/g, "");
 
   useEffect(() => {
     let active = true;
@@ -208,6 +210,17 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
                 { value: "quarters", label: t("Quarters") },
               ]}
             />
+            <Tooltip label={t("Export PNG")}>
+              <Button
+                size="compact-xs"
+                variant="default"
+                leftSection={<IconDownload size={14} />}
+                disabled={!model.projectId || !model.lanes.length}
+                onClick={() => exportRoadmapPng(model, zoom, t)}
+              >
+                {t("Export PNG")}
+              </Button>
+            </Tooltip>
             {isEditable && (
               <Tooltip label={t("Sync from Plane")}>
                 <Button
@@ -319,6 +332,7 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
               </Text>
             )}
             <div className={classes.scroll}>
+              <div className={classes.chart}>
               <div className={classes.grid} style={{ width: 180 + trackWidth }}>
                 <div />
                 <div className={classes.track} style={{ height: 22 }}>
@@ -328,7 +342,7 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
                     </span>
                   ))}
                 </div>
-                {model.lanes.map((lane) => (
+                {orderedLanes(model.lanes).map((lane) => (
                   <LaneRow
                     key={lane.id}
                     lane={lane}
@@ -346,6 +360,15 @@ export default function PlaneRoadmapView(props: NodeViewProps) {
                     t={t}
                   />
                 ))}
+              </div>
+              <DependencyArrows
+                model={model}
+                rows={orderedLanes(model.lanes)}
+                rangeStart={range.start}
+                dayWidth={width}
+                trackWidth={trackWidth}
+                markerId={markerId}
+              />
               </div>
             </div>
           </>
@@ -387,7 +410,7 @@ function LaneRow({
   const bars = model.bars.filter((bar) => bar.laneId === lane.id);
   return (
     <>
-      <div className={classes.laneLabel}>
+      <div className={lane.parentId ? `${classes.laneLabel} ${classes.subLane}` : classes.laneLabel}>
         {editable ? (
           <input
             key={`${lane.id}:${lane.title}`}
@@ -403,6 +426,17 @@ function LaneRow({
           <Text size="sm" truncate>
             {laneLabel(lane, t)}
           </Text>
+        )}
+        {editable && !lane.parentId && (
+          <ActionIcon
+            size="sm"
+            variant="subtle"
+            color="gray"
+            aria-label={t("Add sub-lane")}
+            onClick={() => onCommit(addLane(model, t("Sub-lane"), lane.id))}
+          >
+            <IconPlus size={14} />
+          </ActionIcon>
         )}
         {editable && (
           <ActionIcon
@@ -465,7 +499,10 @@ function RoadmapBarView({
   const barWidth = Math.max(bar.kind === "milestone" ? 14 : 12, daysBetween(bar.start, bar.end) * dayWidth);
 
   function begin(event: React.PointerEvent, edge: DragEdge) {
-    if (!editable) return;
+    if (!editable) {
+      if (edge === "move") onEdit(editing ? null : bar.id);
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     const drag: DragState = {
@@ -542,7 +579,109 @@ function RoadmapBarView({
     </button>
   );
 
-  if (!editable) return control;
+  const details = (
+    <>
+      {editable && (
+        <>
+          <TextInput
+            label={t("Title")}
+            defaultValue={bar.title}
+            key={`${bar.id}:${bar.title}`}
+            mb="xs"
+            onBlur={(event) => {
+              const title = event.currentTarget.value.trim();
+              if (title && title !== bar.title) onCommit(updateBar(model, bar.id, { title }));
+            }}
+          />
+          <Group gap={4} mb="xs">
+            {ROADMAP_COLORS.map((color) => (
+              <ActionIcon
+                key={color}
+                size="sm"
+                variant={color === bar.color ? "filled" : "default"}
+                aria-label={t("Color")}
+                style={{ background: color }}
+                onClick={() => onCommit(updateBar(model, bar.id, { color }))}
+              />
+            ))}
+          </Group>
+          <Select
+            label={t("Depends on")}
+            placeholder={t("Depends on")}
+            data={model.bars
+              .filter((item) => item.id !== bar.id && !bar.dependsOn.includes(item.id))
+              .map((item) => ({ value: item.id, label: item.title }))}
+            value={null}
+            onChange={(value) => {
+              if (!value) return;
+              onCommit(updateBar(model, bar.id, { dependsOn: [...bar.dependsOn, String(value)] }));
+            }}
+            mb="xs"
+            clearable
+          />
+          {bar.dependsOn.map((id) => {
+            const other = model.bars.find((item) => item.id === id);
+            return (
+              <Group key={id} gap={4} mb={4} justify="space-between">
+                <Text size="xs">{other?.title || id}</Text>
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  color="gray"
+                  aria-label={t("Delete")}
+                  onClick={() =>
+                    onCommit(
+                      updateBar(model, bar.id, {
+                        dependsOn: bar.dependsOn.filter((item) => item !== id),
+                      }),
+                    )
+                  }
+                >
+                  <IconTrash size={12} />
+                </ActionIcon>
+              </Group>
+            );
+          })}
+          <TextInput
+            label={t("Link")}
+            defaultValue={bar.link?.href ?? ""}
+            key={`${bar.id}:${bar.link?.href ?? ""}`}
+            mb="xs"
+            onBlur={(event) => {
+              const href = event.currentTarget.value.trim();
+              if (!href) {
+                if (bar.link) onCommit(updateBar(model, bar.id, { link: null }));
+                return;
+              }
+              const kind = href.includes("/projects/") ? "plane" : "page";
+              onCommit(
+                updateBar(model, bar.id, {
+                  link: { kind, href, label: bar.link?.label || bar.title },
+                }),
+              );
+            }}
+          />
+          <Button
+            size="compact-xs"
+            color="red"
+            variant="light"
+            onClick={() => {
+              onEdit(null);
+              onCommit(removeBar(model, bar.id));
+            }}
+          >
+            {t("Delete")}
+          </Button>
+        </>
+      )}
+      {bar.link && (
+        <Anchor href={bar.link.href} target="_blank" rel="noopener noreferrer">
+          {bar.link.label || bar.link.href}
+        </Anchor>
+      )}
+      {!editable && !bar.link && <Text size="sm">{bar.title}</Text>}
+    </>
+  );
 
   return (
     <Popover
@@ -552,41 +691,150 @@ function RoadmapBarView({
       withArrow
     >
       <Popover.Target>{control}</Popover.Target>
-      <Popover.Dropdown>
-        <TextInput
-          label={t("Title")}
-          defaultValue={bar.title}
-          key={`${bar.id}:${bar.title}`}
-          mb="xs"
-          onBlur={(event) => {
-            const title = event.currentTarget.value.trim();
-            if (title && title !== bar.title) onCommit(updateBar(model, bar.id, { title }));
-          }}
-        />
-        <Group gap={4} mb="xs">
-          {ROADMAP_COLORS.map((color) => (
-            <ActionIcon
-              key={color}
-              size="sm"
-              variant={color === bar.color ? "filled" : "default"}
-              aria-label={t("Color")}
-              style={{ background: color }}
-              onClick={() => onCommit(updateBar(model, bar.id, { color }))}
-            />
-          ))}
-        </Group>
-        <Button
-          size="compact-xs"
-          color="red"
-          variant="light"
-          onClick={() => {
-            onEdit(null);
-            onCommit(removeBar(model, bar.id));
-          }}
-        >
-          {t("Delete")}
-        </Button>
-      </Popover.Dropdown>
+      <Popover.Dropdown>{details}</Popover.Dropdown>
     </Popover>
   );
+}
+
+const ROW_HEIGHT = 40;
+
+function orderedLanes(lanes: RoadmapLane[]): RoadmapLane[] {
+  const rows: RoadmapLane[] = [];
+  for (const lane of lanes) {
+    if (lane.parentId) continue;
+    rows.push(lane);
+    for (const child of lanes) {
+      if (child.parentId === lane.id) rows.push(child);
+    }
+  }
+  return rows;
+}
+
+function DependencyArrows({
+  model,
+  rows,
+  rangeStart,
+  dayWidth,
+  trackWidth,
+  markerId,
+}: {
+  model: RoadmapModel;
+  rows: RoadmapLane[];
+  rangeStart: string;
+  dayWidth: number;
+  trackWidth: number;
+  markerId: string;
+}) {
+  const index = new Map(rows.map((lane, row) => [lane.id, row]));
+  const arrows = model.bars.flatMap((bar) =>
+    bar.dependsOn.map((dependencyId) => {
+      const from = model.bars.find((item) => item.id === dependencyId);
+      if (!from) return null;
+      const fromRow = index.get(from.laneId);
+      const toRow = index.get(bar.laneId);
+      if (fromRow === undefined || toRow === undefined) return null;
+      const x1 =
+        daysBetween(rangeStart, from.start) * dayWidth +
+        (from.kind === "milestone" ? 14 : Math.max(12, daysBetween(from.start, from.end) * dayWidth));
+      const y1 = fromRow * ROW_HEIGHT + 19;
+      const x2 = daysBetween(rangeStart, bar.start) * dayWidth;
+      const y2 = toRow * ROW_HEIGHT + 19;
+      const mid = (x1 + x2) / 2;
+      return (
+        <path
+          key={`${from.id}-${bar.id}`}
+          d={`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`}
+          stroke="#868e96"
+          strokeWidth="2"
+          fill="none"
+          markerEnd={`url(#${markerId})`}
+        />
+      );
+    }),
+  );
+  return (
+    <svg
+      className={classes.arrows}
+      width={trackWidth}
+      height={Math.max(rows.length * ROW_HEIGHT, 1)}
+      style={{ width: trackWidth, height: Math.max(rows.length * ROW_HEIGHT, 1) }}
+      aria-hidden="true"
+    >
+      <defs>
+        <marker id={markerId} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6" fill="#868e96" />
+        </marker>
+      </defs>
+      {arrows}
+    </svg>
+  );
+}
+
+function exportRoadmapPng(
+  model: RoadmapModel,
+  zoom: RoadmapZoom,
+  t: (key: string) => string,
+) {
+  const rows = orderedLanes(model.lanes);
+  if (!rows.length) return;
+  const range = rangeOf(model);
+  const width = dayWidth(zoom);
+  const labelWidth = 180;
+  const trackWidth = Math.max(1, daysBetween(range.start, range.end)) * width;
+  const header = 28;
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil((labelWidth + trackWidth) * scale);
+  canvas.height = Math.ceil((header + rows.length * ROW_HEIGHT) * scale);
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  context.scale(scale, scale);
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, labelWidth + trackWidth, header + rows.length * ROW_HEIGHT);
+  context.strokeStyle = "#dee2e6";
+  context.strokeRect(0, 0, labelWidth + trackWidth, header + rows.length * ROW_HEIGHT);
+  context.fillStyle = "#868e96";
+  context.font = "11px sans-serif";
+  for (const tick of ticksFor(range.start, range.end, zoom, width)) {
+    context.fillText(tick.label, labelWidth + tick.x, 16);
+  }
+  const todayX = labelWidth + daysBetween(range.start, range.today) * width;
+  context.strokeStyle = "#fa5252";
+  context.beginPath();
+  context.moveTo(todayX, header);
+  context.lineTo(todayX, header + rows.length * ROW_HEIGHT);
+  context.stroke();
+  rows.forEach((lane, row) => {
+    const top = header + row * ROW_HEIGHT;
+    context.fillStyle = "#212529";
+    context.font = "13px sans-serif";
+    context.fillText(laneLabel(lane, t), lane.parentId ? 24 : 8, top + 24);
+    for (const bar of model.bars.filter((item) => item.laneId === lane.id)) {
+      const x = labelWidth + daysBetween(range.start, bar.start) * width;
+      const barWidth =
+        bar.kind === "milestone" ? 12 : Math.max(12, daysBetween(bar.start, bar.end) * width);
+      context.fillStyle = bar.color;
+      if (bar.kind === "milestone") {
+        context.save();
+        context.translate(x + 7, top + 20);
+        context.rotate(Math.PI / 4);
+        context.fillRect(-6, -6, 12, 12);
+        context.restore();
+      } else {
+        context.fillRect(x, top + 12, barWidth, 16);
+        context.fillStyle = "#ffffff";
+        context.font = "11px sans-serif";
+        context.fillText(bar.title, x + 4, top + 24);
+      }
+    }
+  });
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "roadmap.png";
+    link.click();
+    URL.revokeObjectURL(url);
+  });
 }

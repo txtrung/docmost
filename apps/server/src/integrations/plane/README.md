@@ -34,7 +34,7 @@ Every Plane request uses the server API key. Docmost then keeps a project only w
 
 ## Cache
 
-Plane responses sit in Redis for 60 seconds. The work-item collection name (`work-items`, or `issues` on older Plane) is remembered for 10 minutes. A `429` is retried once, using `Retry-After` and capped at 60 seconds.
+Plane responses sit in Redis for 60 seconds. The work-item collection name (`work-items`, or `issues` on older Plane) is remembered for 10 minutes. A `429` on a read is retried once, using `Retry-After` and capped at 60 seconds. Creating a work item does not retry, so a rate limit cannot insert the item twice. A successful create deletes the cached work-item list for that project.
 
 Lists page with `cursor` and `per_page` of 100. Docmost reads at most 10 pages (1000 records) per resource before filters run.
 
@@ -42,15 +42,15 @@ Lists page with `cursor` and `per_page` of 100. Docmost reads at most 10 pages (
 
 **Table of contents** inserts a live outline of the page headings. The settings choose the minimum and maximum heading level, a list or a one-line layout, numbering, and a pinned outline on the side of the page. A click scrolls to the heading.
 
-**Plane tasks** inserts a `planeTaskList` block. A modal sets the project, filters, column order, and a table, card, or count layout. Pasting a Plane project or work-item URL from the same origin offers to insert the block. A card layout shows one work item. The footer shows the match count and the local time of the last refresh.
+**Plane tasks** inserts a `planeTaskList` block. A modal sets the project, filters, column order, and a table, card, or count layout. Pasting a Plane project or work-item URL from the same origin offers to insert the block. A card layout shows one work item. The footer shows the match count and the local time of the last refresh. Table headers sort the list. Previous and Next move through pages of the configured limit. Assignee cells use the Plane avatar URL when it is an http or https address, and initials otherwise. An editor who can edit the page and who is a member of the project can create a work item from the block. That is the only write. The server keeps the API key and drops the Redis list for that project after a successful create.
 
-**Plane roadmap** inserts a `planeRoadmap` timeline. Sync from Plane fills lanes from modules, cycles, or dated work items. Bars and milestones can be dragged, renamed, recolored, added, and removed. Each item is `plane` or `manual`. Sync refreshes Plane items and keeps manual items, edited Plane items, and deletions. Viewers get the same timeline without those controls. Zoom can be weeks, months, or quarters.
+**Plane roadmap** inserts a `planeRoadmap` timeline. Sync from Plane fills lanes from modules, cycles, or dated work items. Bars and milestones can be dragged, renamed, recolored, added, and removed. A lane can hold one level of sub-lanes. A bar can depend on other bars, which draws an arrow, and can store a Docmost page link or a Plane work-item link. Export PNG downloads a snapshot of the current timeline. Each item is `plane` or `manual`. Sync refreshes Plane items and keeps manual items, edited Plane items, and deletions. A dependency that points at a missing bar is dropped. Viewers get the same timeline without the edit controls. Zoom can be weeks, months, or quarters.
 
 An older page may still contain a Mermaid gantt snapshot. That diagram still renders. It no longer has a regenerate action.
 
 ## Limitations
 
-Docmost does not create or edit Plane work items.
+Docmost can create a work item. It does not edit or delete Plane work items.
 
 Filters and the roadmap only see the first 1000 work items in the cached list.
 

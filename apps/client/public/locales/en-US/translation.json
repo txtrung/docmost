@@ -1761,5 +1761,13 @@
   "Failed to load the roadmap.": "Failed to load the roadmap.",
   "This roadmap is not set up.": "This roadmap is not set up.",
   "No lanes yet.": "No lanes yet.",
-  "Bar": "Bar"
+  "Bar": "Bar",
+  "Create work item": "Create work item",
+  "Page {{page}}": "Page {{page}}",
+  "Add sub-lane": "Add sub-lane",
+  "Depends on": "Depends on",
+  "Export PNG": "Export PNG",
+  "Sub-lane": "Sub-lane",
+  "Title is required.": "Title is required.",
+  "Link": "Link"
 }

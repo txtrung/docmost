@@ -4,6 +4,7 @@ import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User } from '@docmost/db/types/entity.types';
 import { PlaneService } from './plane.service';
 import {
+  PlaneCreateWorkItemDto,
   PlaneParseUrlDto,
   PlaneProjectDto,
   PlaneRoadmapDto,
@@ -31,6 +32,19 @@ export class PlaneController {
       configured: true,
       projects: await this.planeService.listVisibleProjects(user.email),
     };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('work-items/create')
+  async createWorkItem(
+    @AuthUser() user: User,
+    @Body() dto: PlaneCreateWorkItemDto,
+  ) {
+    if (!this.planeService.isConfigured()) {
+      return { configured: false, item: null };
+    }
+    const item = await this.planeService.createWorkItem(user, dto);
+    return { configured: true, item };
   }
 
   @HttpCode(HttpStatus.OK)

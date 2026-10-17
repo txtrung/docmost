@@ -38,7 +38,7 @@ export function planeIssueUrl(
 
 export function normalizePerson(value: unknown): PlanePerson | null {
   if (typeof value === 'string' && value.trim()) {
-    return { id: value.trim(), email: '', name: value.trim() };
+    return { id: value.trim(), email: '', name: value.trim(), avatarUrl: null };
   }
   const record = asRecord(value);
   if (!record) return null;
@@ -51,7 +51,49 @@ export function normalizePerson(value: unknown): PlanePerson | null {
     email ||
     id;
   if (!id && !email) return null;
-  return { id, email, name };
+  return {
+    id,
+    email,
+    name,
+    avatarUrl: personAvatar(nested) || personAvatar(record),
+  };
+}
+
+function personAvatar(record: Record<string, any>): string | null {
+  const avatar = asRecord(record.avatar);
+  return (
+    httpUrl(record.avatar_url) ||
+    httpUrl(record.avatar) ||
+    httpUrl(avatar?.url) ||
+    httpUrl(record.display_avatar)
+  );
+}
+
+function httpUrl(value: unknown): string | null {
+  const raw = text(value);
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.toString().slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
+export function buildWorkItemPayload(input: {
+  title: string;
+  stateId?: string;
+  priority?: string;
+  assigneeId?: string;
+}): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    name: input.title.trim().slice(0, 200),
+  };
+  if (input.priority) body.priority = input.priority;
+  if (input.stateId) body.state = input.stateId;
+  if (input.assigneeId) body.assignees = [input.assigneeId];
+  return body;
 }
 
 function normalizeLabel(value: unknown): { id: string; name: string; color: string } | null {

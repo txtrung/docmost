@@ -3,12 +3,19 @@ export type RoadmapGrouping = "cycles" | "modules" | "workItems";
 export type RoadmapZoom = "weeks" | "months" | "quarters";
 export type RoadmapKind = "bar" | "milestone";
 
+export type RoadmapLink = {
+  kind: "page" | "plane";
+  href: string;
+  label: string;
+};
+
 export type RoadmapLane = {
   id: string;
   title: string;
   source: RoadmapSource;
   planeId: string | null;
   overridden: boolean;
+  parentId: string | null;
 };
 
 export type RoadmapBar = {
@@ -22,6 +29,8 @@ export type RoadmapBar = {
   source: RoadmapSource;
   planeId: string | null;
   overridden: boolean;
+  dependsOn: string[];
+  link: RoadmapLink | null;
 };
 
 export type RoadmapModel = {
@@ -114,6 +123,7 @@ export function buildRoadmapFromPlane(input: {
       source: "plane",
       planeId,
       overridden: false,
+      parentId: null,
     });
   };
 
@@ -150,6 +160,8 @@ export function buildRoadmapFromPlane(input: {
       source: "plane",
       planeId: item.id,
       overridden: false,
+      dependsOn: [],
+      link: null,
     });
   }
 
@@ -193,13 +205,14 @@ export function parseRoadmapModel(raw: unknown): RoadmapModel | null {
     if (bars.length >= MAX_BARS) break;
   }
 
+  const settled = settleRoadmap(lanes, bars);
   return {
     projectId:
       typeof value.projectId === "string" ? value.projectId.slice(0, 64) : "",
     grouping,
     zoom: zoomOf(value.zoom),
-    lanes,
-    bars,
+    lanes: settled.lanes,
+    bars: settled.bars,
     removedPlaneIds: parseRemoved(value.removedPlaneIds),
   };
 }
@@ -247,6 +260,7 @@ export function mergeRoadmap(currentRaw: unknown, fresh: RoadmapModel): RoadmapM
         source: "manual",
         planeId: null,
         overridden: false,
+        parentId: null,
       },
     ];
   }
@@ -303,8 +317,16 @@ export function setZoom(model: RoadmapModel, zoom: RoadmapZoom): RoadmapModel {
   return { ...model, zoom };
 }
 
-export function addLane(model: RoadmapModel, title: string): RoadmapModel {
+export function addLane(
+  model: RoadmapModel,
+  title: string,
+  parentId: string | null = null,
+): RoadmapModel {
   if (model.lanes.length >= MAX_LANES) return model;
+  const parent = parentId
+    ? model.lanes.find((lane) => lane.id === parentId)
+    : undefined;
+  const resolved = parent && !parent.parentId ? parent.id : null;
   return {
     ...model,
     lanes: [
@@ -315,6 +337,7 @@ export function addLane(model: RoadmapModel, title: string): RoadmapModel {
         source: "manual",
         planeId: null,
         overridden: false,
+        parentId: resolved,
       },
     ],
   };
@@ -340,17 +363,21 @@ export function updateLane(
 }
 
 export function removeLane(model: RoadmapModel, laneId: string): RoadmapModel {
-  const lane = model.lanes.find((item) => item.id === laneId);
+  const drop = laneFamily(model.lanes, laneId);
   const removed = new Set(model.removedPlaneIds);
-  if (lane?.source === "plane" && lane.planeId) removed.add(lane.planeId);
+  for (const lane of model.lanes) {
+    if (!drop.has(lane.id)) continue;
+    if (lane.source === "plane" && lane.planeId) removed.add(lane.planeId);
+  }
   for (const bar of model.bars) {
-    if (bar.laneId !== laneId) continue;
+    if (!drop.has(bar.laneId)) continue;
     if (bar.source === "plane" && bar.planeId) removed.add(bar.planeId);
   }
+  const kept = model.bars.filter((item) => !drop.has(item.laneId));
   return {
     ...model,
-    lanes: model.lanes.filter((item) => item.id !== laneId),
-    bars: model.bars.filter((item) => item.laneId !== laneId),
+    lanes: model.lanes.filter((item) => !drop.has(item.id)),
+    bars: stripMissingDependencies(kept),
     removedPlaneIds: [...removed],
   };
 }
@@ -381,6 +408,8 @@ export function addManualBar(
         source: "manual",
         planeId: null,
         overridden: false,
+        dependsOn: [],
+        link: null,
       },
     ],
   };
@@ -395,9 +424,11 @@ export function updateBar(
     end?: string;
     color?: string;
     laneId?: string;
+    dependsOn?: string[];
+    link?: RoadmapLink | null;
   },
 ): RoadmapModel {
-  return {
+  const next = {
     ...model,
     bars: model.bars.map((bar) => {
       if (bar.id !== id) return bar;
@@ -415,10 +446,14 @@ export function updateBar(
         end: span.end,
         color: patch.color && COLOR_RE.test(patch.color) ? patch.color : bar.color,
         kind: span.start === span.end ? "milestone" : "bar",
+        dependsOn:
+          patch.dependsOn !== undefined ? uniqueIds(patch.dependsOn) : bar.dependsOn,
+        link: patch.link !== undefined ? parseLink(patch.link) : bar.link,
         overridden: bar.source === "plane" ? true : bar.overridden,
       };
     }),
   };
+  return parseRoadmapModel(next) ?? model;
 }
 
 export function removeBar(model: RoadmapModel, id: string): RoadmapModel {
@@ -427,7 +462,7 @@ export function removeBar(model: RoadmapModel, id: string): RoadmapModel {
   if (bar?.source === "plane" && bar.planeId) removed.add(bar.planeId);
   return {
     ...model,
-    bars: model.bars.filter((item) => item.id !== id),
+    bars: stripMissingDependencies(model.bars.filter((item) => item.id !== id)),
     removedPlaneIds: [...removed],
   };
 }
@@ -446,6 +481,7 @@ function parseLane(raw: unknown): RoadmapLane | null {
     source,
     planeId: source === "manual" ? null : planeId,
     overridden: source === "plane" && value.overridden === true,
+    parentId: parentIdOf(value.parentId),
   };
 }
 
@@ -478,6 +514,74 @@ function parseBar(raw: unknown, laneIds: Set<string>): RoadmapBar | null {
     source,
     planeId: source === "manual" ? null : planeId,
     overridden: source === "plane" && value.overridden === true,
+    dependsOn: uniqueIds(value.dependsOn),
+    link: parseLink(value.link),
+  };
+}
+
+function settleRoadmap(lanes: RoadmapLane[], bars: RoadmapBar[]) {
+  const byId = new Map(lanes.map((lane) => [lane.id, lane]));
+  const settledLanes = lanes.map((lane) => {
+    const parent = lane.parentId ? byId.get(lane.parentId) : undefined;
+    if (!parent || parent.id === lane.id || parent.parentId) {
+      return lane.parentId ? { ...lane, parentId: null } : lane;
+    }
+    return lane;
+  });
+  return { lanes: settledLanes, bars: stripMissingDependencies(bars) };
+}
+
+function stripMissingDependencies(bars: RoadmapBar[]): RoadmapBar[] {
+  const ids = new Set(bars.map((bar) => bar.id));
+  return bars.map((bar) => {
+    const dependsOn = bar.dependsOn.filter((id) => id !== bar.id && ids.has(id));
+    if (dependsOn.length === bar.dependsOn.length) return bar;
+    return { ...bar, dependsOn };
+  });
+}
+
+function laneFamily(lanes: RoadmapLane[], laneId: string): Set<string> {
+  const drop = new Set<string>();
+  const queue = [laneId];
+  while (queue.length) {
+    const current = queue.pop();
+    if (!current || drop.has(current)) continue;
+    drop.add(current);
+    for (const lane of lanes) {
+      if (lane.parentId === current) queue.push(lane.id);
+    }
+  }
+  return drop;
+}
+
+function parentIdOf(value: unknown): string | null {
+  return typeof value === "string" && ID_RE.test(value) ? value : null;
+}
+
+function uniqueIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string" || !ID_RE.test(item) || ids.includes(item)) continue;
+    ids.push(item);
+    if (ids.length >= 20) break;
+  }
+  return ids;
+}
+
+const HREF_RE = /^(https?:\/\/|\/)\S{1,500}$/i;
+
+function parseLink(raw: unknown): RoadmapLink | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const kind = value.kind === "page" || value.kind === "plane" ? value.kind : null;
+  if (!kind || typeof value.href !== "string") return null;
+  const href = value.href.trim();
+  if (!HREF_RE.test(href)) return null;
+  return {
+    kind,
+    href: href.slice(0, 500),
+    label: typeof value.label === "string" ? clampTitle(value.label) : "",
   };
 }
 

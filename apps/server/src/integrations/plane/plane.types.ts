@@ -4,6 +4,7 @@ export type PlanePerson = {
   id: string;
   email: string;
   name: string;
+  avatarUrl: string | null;
 };
 
 export type PlaneLabelRef = {
@@ -81,6 +82,7 @@ export type PlaneFilterInput = {
   id?: string;
   sort?: string;
   limit?: number;
+  page?: number;
 };
 
 export type PlaneRoadmapGrouping = 'cycles' | 'modules' | 'workItems';

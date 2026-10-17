@@ -52,6 +52,13 @@ export function sanitizePlaneFilters(input: unknown): PlaneFilterInput {
     filters.limit = Number(limit.trim());
   }
 
+  const page = source.page;
+  if (typeof page === 'number' && Number.isFinite(page)) {
+    filters.page = Math.trunc(page);
+  } else if (typeof page === 'string' && /^\d+$/.test(page.trim())) {
+    filters.page = Number(page.trim());
+  }
+
   return filters;
 }
 
@@ -198,9 +205,28 @@ function compareTasks(
       // Rank 0 is urgent. Descending priority lists urgent first.
       return compareValues(rightRank, leftRank, desc);
     }
+    case 'state':
+      return compareValues(
+        (left.stateName ?? '').toLowerCase(),
+        (right.stateName ?? '').toLowerCase(),
+        desc,
+      );
+    case 'assignee':
+      return compareValues(firstAssignee(left), firstAssignee(right), desc);
+    case 'label':
+      return compareValues(firstLabel(left), firstLabel(right), desc);
     default:
       return 0;
   }
+}
+
+function firstAssignee(item: NormalizedPlaneTask): string {
+  const person = item.assignees[0];
+  return (person?.name || person?.email || '').toLowerCase();
+}
+
+function firstLabel(item: NormalizedPlaneTask): string {
+  return (item.labels[0]?.name || '').toLowerCase();
 }
 
 function clampLimit(limit: number | undefined): number {
@@ -208,6 +234,11 @@ function clampLimit(limit: number | undefined): number {
     return DEFAULT_LIMIT;
   }
   return Math.min(Math.trunc(limit), MAX_LIMIT);
+}
+
+function clampPage(page: number | undefined): number {
+  if (page === undefined || !Number.isFinite(page) || page < 1) return 1;
+  return Math.min(Math.trunc(page), 1000);
 }
 
 export function filterPlaneWorkItems(
@@ -227,8 +258,9 @@ export function filterPlaneWorkItems(
     : matched;
 
   const limit = clampLimit(filters.limit);
+  const start = (clampPage(filters.page) - 1) * limit;
   return {
-    items: sorted.slice(0, limit),
+    items: sorted.slice(start, start + limit),
     total: sorted.length,
   };
 }

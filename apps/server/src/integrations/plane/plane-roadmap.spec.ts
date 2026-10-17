@@ -217,4 +217,60 @@ describe('parseRoadmapModel', () => {
     expect(parseRoadmapModel({})).toBeNull();
     expect(parseRoadmapModel(null)).toBeNull();
   });
+
+  it('keeps one level of sub-lanes and drops a parent that is itself a child', () => {
+    const parsed = parseRoadmapModel({
+      grouping: 'modules',
+      lanes: [
+        { id: 'lane-a', title: 'A', source: 'manual' },
+        { id: 'lane-b', title: 'B', source: 'manual', parentId: 'lane-a' },
+        { id: 'lane-c', title: 'C', source: 'manual', parentId: 'lane-b' },
+        { id: 'lane-d', title: 'D', source: 'manual', parentId: 'missing' },
+      ],
+      bars: [],
+    });
+    expect(parsed?.lanes.map((lane) => [lane.id, lane.parentId])).toEqual([
+      ['lane-a', null],
+      ['lane-b', 'lane-a'],
+      ['lane-c', null],
+      ['lane-d', null],
+    ]);
+  });
+
+  it('drops dependency ids that do not exist and keeps a page link', () => {
+    const parsed = parseRoadmapModel({
+      grouping: 'modules',
+      lanes: [{ id: 'lane-a', title: 'A', source: 'manual' }],
+      bars: [
+        {
+          id: 'bar-a',
+          laneId: 'lane-a',
+          title: 'A',
+          start: '2026-06-01',
+          end: '2026-06-05',
+          source: 'manual',
+          dependsOn: ['bar-b', 'missing', 'bar-a'],
+          link: { kind: 'page', href: '/s/san-pham/p/plan', label: 'Plan' },
+        },
+        {
+          id: 'bar-b',
+          laneId: 'lane-a',
+          title: 'B',
+          start: '2026-06-06',
+          end: '2026-06-08',
+          source: 'manual',
+          dependsOn: ['bar-a'],
+          link: { kind: 'plane', href: 'javascript:alert(1)', label: 'Bad' },
+        },
+      ],
+    });
+    expect(parsed?.bars.find((bar) => bar.id === 'bar-a')?.dependsOn).toEqual(['bar-b']);
+    expect(parsed?.bars.find((bar) => bar.id === 'bar-a')?.link).toEqual({
+      kind: 'page',
+      href: '/s/san-pham/p/plan',
+      label: 'Plan',
+    });
+    expect(parsed?.bars.find((bar) => bar.id === 'bar-b')?.dependsOn).toEqual(['bar-a']);
+    expect(parsed?.bars.find((bar) => bar.id === 'bar-b')?.link).toBeNull();
+  });
 });
