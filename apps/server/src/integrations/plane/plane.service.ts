@@ -34,20 +34,29 @@ import {
   normalizeWorkItem,
 } from './plane-normalize';
 import { filterPlaneWorkItems, sanitizePlaneFilters } from './plane-filters';
-import { buildPlaneGantt, formatPlaneRoadmapMarker } from './plane-gantt';
+import { buildRoadmapFromPlane, mergeRoadmap } from '@docmost/editor-ext';
 import {
   NormalizedPlaneTask,
   PlaneCycle,
-  PlaneGanttGrouping,
   PlaneLabel,
   PlaneModule,
   PlanePerson,
   PlaneProject,
+  PlaneRoadmapGrouping,
   PlaneState,
 } from './plane.types';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const COLLECTION_TTL_MS = 10 * 60 * 1000;
+
+function parseCurrent(current: string | undefined): unknown {
+  if (!current) return null;
+  try {
+    return JSON.parse(current);
+  } catch {
+    return null;
+  }
+}
 
 type PlaneConfig = {
   baseUrl: string;
@@ -132,18 +141,47 @@ export class PlaneService {
     return members;
   }
 
+  async parseUrl(email: string, rawUrl: string) {
+    const config = this.requireConfig();
+    let url: URL;
+    try {
+      url = new URL(rawUrl);
+    } catch {
+      return { projectId: null, workItemId: null };
+    }
+    if (url.origin !== config.origin) {
+      return { projectId: null, workItemId: null };
+    }
+    const parts = url.pathname.split('/').filter(Boolean);
+    const projectsAt = parts.indexOf('projects');
+    const slugAt = parts.indexOf(config.slug);
+    if (projectsAt < 0 || slugAt < 0 || slugAt > projectsAt) {
+      return { projectId: null, workItemId: null };
+    }
+    const projectId = parts[projectsAt + 1] ?? '';
+    this.assertId(projectId);
+    const kind = parts[projectsAt + 2];
+    const rawItemId = parts[projectsAt + 3] ?? '';
+    let workItemId: string | null = null;
+    if ((kind === 'issues' || kind === 'work-items') && rawItemId) {
+      this.assertId(rawItemId);
+      workItemId = rawItemId;
+    }
+    await this.assertMember(config, projectId, this.requireEmail(email));
+    return { projectId, workItemId };
+  }
+
   async buildRoadmap(
     email: string,
     projectId: string,
-    grouping: PlaneGanttGrouping,
+    grouping: PlaneRoadmapGrouping,
+    current: string | undefined,
   ) {
     const config = this.requireConfig();
     this.assertId(projectId);
     const normalizedEmail = this.requireEmail(email);
     await this.assertMember(config, projectId, normalizedEmail);
 
-    const projects = await this.cachedProjects(config);
-    const project = projects.find((item) => item.id === projectId);
     const tasks = await this.cachedWorkItems(config, projectId);
     const cycles =
       grouping === 'cycles'
@@ -159,22 +197,33 @@ export class PlaneService {
           )
         : [];
 
-    const chart = buildPlaneGantt({
-      title: project?.name || 'Plane',
+    const fresh = buildRoadmapFromPlane({
+      projectId,
       grouping,
-      tasks,
-      cycles,
-      modules,
+      lanes:
+        grouping === 'cycles'
+          ? cycles.map((cycle) => ({ id: cycle.id, title: cycle.name }))
+          : grouping === 'modules'
+            ? modules.map((moduleItem) => ({
+                id: moduleItem.id,
+                title: moduleItem.name,
+              }))
+            : [],
+      items: tasks.map((task) => ({
+        id: task.id,
+        title: task.ref ? `${task.ref} ${task.title}` : task.title,
+        start: task.startDate,
+        end: task.dueDate,
+        laneKey:
+          grouping === 'cycles'
+            ? task.cycleId
+            : grouping === 'modules'
+              ? (task.moduleIds[0] ?? null)
+              : null,
+      })),
     });
 
-    if (!chart.taskCount) {
-      return { mermaid: '', taskCount: 0 };
-    }
-
-    return {
-      mermaid: `${formatPlaneRoadmapMarker(projectId, grouping)}\n${chart.mermaid}`,
-      taskCount: chart.taskCount,
-    };
+    return { model: mergeRoadmap(parseCurrent(current), fresh) };
   }
 
   private async listProjectResource<T>(

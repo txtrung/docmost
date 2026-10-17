@@ -117,6 +117,12 @@ describe('filterPlaneWorkItems', () => {
     expect(result.items.map((item) => item.id)).toEqual(['task-1']);
   });
 
+  it('matches an exact work item id', () => {
+    expect(
+      filterPlaneWorkItems(items, { id: 'task-2', limit: 10 }, '').items.map((item) => item.id),
+    ).toEqual(['task-2']);
+  });
+
   it('searches title, ref, and label text', () => {
     expect(
       filterPlaneWorkItems(items, { search: 'app-2', limit: 10 }, '').items.map((item) => item.id),

@@ -3,14 +3,16 @@ import { NodeViewProps, NodeViewWrapper, useEditorState } from "@tiptap/react";
 import {
   ActionIcon,
   Anchor,
+  Avatar,
   Badge,
   Group,
   Loader,
+  Modal,
   Paper,
-  Popover,
   ScrollArea,
   Table,
   Text,
+  Title,
   Tooltip,
 } from "@mantine/core";
 import { IconRefresh, IconSettings } from "@tabler/icons-react";
@@ -24,7 +26,10 @@ import {
   PlaneProject,
   PlaneTask,
 } from "./plane-api";
-import PlaneTaskSettings, { PlaneTaskSettingsValue } from "./plane-task-settings";
+import PlaneTaskSettings, {
+  PlaneDisplayMode,
+  PlaneTaskSettingsValue,
+} from "./plane-task-settings";
 
 const PRIORITY_COLOR: Record<string, string> = {
   urgent: "red",
@@ -46,6 +51,10 @@ export default function PlaneTaskListView(props: NodeViewProps) {
   const columns = parsePlaneColumns(String(node.attrs.columns || ""));
   const sort = String(node.attrs.sort || "updated:desc");
   const limit = Number(node.attrs.limit) || 50;
+  const displayMode: PlaneDisplayMode =
+    node.attrs.displayMode === "card" || node.attrs.displayMode === "count"
+      ? node.attrs.displayMode
+      : "table";
 
   const [projects, setProjects] = useState<PlaneProject[]>([]);
   const [configured, setConfigured] = useState(true);
@@ -56,6 +65,7 @@ export default function PlaneTaskListView(props: NodeViewProps) {
   const [error, setError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(!projectId && isEditable);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState("");
   const requestKey = `${projectId}|${node.attrs.filters}|${sort}|${limit}|${refreshToken}`;
   const visibleItems = loadedKey === requestKey ? items : [];
   const showLoading = Boolean(projectId) && (loading || loadedKey !== requestKey);
@@ -89,6 +99,12 @@ export default function PlaneTaskListView(props: NodeViewProps) {
           setItems(result.items);
           setTotal(result.total);
           setLoadedKey(requestKey);
+          setUpdatedAt(
+            new Date().toLocaleTimeString(undefined, {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          );
           setError("");
         })
         .catch((err) => {
@@ -113,7 +129,8 @@ export default function PlaneTaskListView(props: NodeViewProps) {
       filters: JSON.stringify(next.filters),
       columns: JSON.stringify(next.columns),
       sort: next.sort,
-      limit: next.limit,
+      limit: next.displayMode === "card" ? 1 : next.limit,
+      displayMode: next.displayMode,
     });
   }
 
@@ -140,35 +157,32 @@ export default function PlaneTaskListView(props: NodeViewProps) {
               </ActionIcon>
             </Tooltip>
             {isEditable && (
-              <Popover
-                opened={settingsOpen}
-                onChange={setSettingsOpen}
-                position="bottom-end"
-                width={320}
-                shadow="md"
-              >
-                <Popover.Target>
-                  <Tooltip label={t("Plane tasks settings")}>
-                    <ActionIcon
-                      variant="subtle"
-                      color="gray"
-                      aria-label={t("Plane tasks settings")}
-                      onClick={() => setSettingsOpen((open) => !open)}
-                    >
-                      <IconSettings size={16} />
-                    </ActionIcon>
-                  </Tooltip>
-                </Popover.Target>
-                <Popover.Dropdown>
-                  <ScrollArea.Autosize mah={420} type="auto">
+              <>
+                <Tooltip label={t("Plane tasks settings")}>
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    aria-label={t("Plane tasks settings")}
+                    onClick={() => setSettingsOpen(true)}
+                  >
+                    <IconSettings size={16} />
+                  </ActionIcon>
+                </Tooltip>
+                <Modal
+                  opened={settingsOpen}
+                  onClose={() => setSettingsOpen(false)}
+                  title={t("Plane tasks settings")}
+                  size="lg"
+                >
+                  <ScrollArea.Autosize mah={520} type="auto">
                     <PlaneTaskSettings
                       projects={projects}
-                      value={{ projectId, filters, columns, sort, limit }}
+                      value={{ projectId, filters, columns, sort, limit, displayMode }}
                       onChange={applySettings}
                     />
                   </ScrollArea.Autosize>
-                </Popover.Dropdown>
-              </Popover>
+                </Modal>
+              </>
             )}
           </Group>
         </Group>
@@ -183,10 +197,21 @@ export default function PlaneTaskListView(props: NodeViewProps) {
           <Text size="sm">{t("Select a project")}</Text>
         )}
         {showLoading && <Loader size="sm" mt="xs" />}
-        {configured && !error && projectId && !showLoading && visibleItems.length === 0 && (
+        {displayMode !== "count" &&
+          configured &&
+          !error &&
+          projectId &&
+          !showLoading &&
+          visibleItems.length === 0 && (
           <Text size="sm">{t("No work items match these filters.")}</Text>
         )}
-        {visibleItems.length > 0 && (
+        {displayMode === "count" && !showLoading && projectId && !error && configured && (
+          <Title order={2}>{total}</Title>
+        )}
+        {displayMode === "card" && visibleItems[0] && (
+          <TaskCard item={visibleItems[0]} t={t} />
+        )}
+        {displayMode === "table" && visibleItems.length > 0 && (
           <Table striped highlightOnHover withTableBorder verticalSpacing="xs">
             <Table.Thead>
               <Table.Tr>
@@ -206,11 +231,11 @@ export default function PlaneTaskListView(props: NodeViewProps) {
             </Table.Tbody>
           </Table>
         )}
-        {projectId && total > visibleItems.length && visibleItems.length > 0 && (
+        {projectId && !showLoading && !error && configured && updatedAt && (
           <Text size="xs" c="dimmed" mt="xs">
-            {t("Showing {{shown}} of {{total}}", {
-              shown: visibleItems.length,
+            {t("{{total}} items, updated at {{time}}", {
               total,
+              time: updatedAt,
             })}
           </Text>
         )}
@@ -223,6 +248,8 @@ function columnHeader(column: string): string {
   switch (column) {
     case "title":
       return "Title";
+    case "key":
+      return "Key";
     case "state":
       return "State";
     case "assignees":
@@ -244,6 +271,8 @@ function renderCell(
   t: (key: string) => string,
 ) {
   switch (column) {
+    case "key":
+      return item.ref || "—";
     case "title":
       return (
         <Anchor href={item.url} target="_blank" rel="noopener noreferrer">
@@ -279,6 +308,43 @@ function renderCell(
     default:
       return null;
   }
+}
+
+function TaskCard({
+  item,
+  t,
+}: {
+  item: PlaneTask;
+  t: (key: string) => string;
+}) {
+  const person = item.assignees[0];
+  const initials = (person?.name || person?.email || "?").slice(0, 1).toUpperCase();
+  return (
+    <Group wrap="nowrap" gap="sm">
+      <Text fw={700} size="sm">
+        {item.ref || "—"}
+      </Text>
+      <Anchor href={item.url} target="_blank" rel="noopener noreferrer">
+        {item.title}
+      </Anchor>
+      {item.stateName && (
+        <Badge variant="light" color="gray">
+          {item.stateName}
+        </Badge>
+      )}
+      {person && (
+        <Group gap={6} wrap="nowrap">
+          <Avatar size="sm" radius="xl" color="blue">
+            {initials}
+          </Avatar>
+          <Text size="sm">{person.name || person.email}</Text>
+        </Group>
+      )}
+      <Badge variant="light" color={PRIORITY_COLOR[item.priority] || "gray"}>
+        {t(priorityLabel(item.priority))}
+      </Badge>
+    </Group>
+  );
 }
 
 function priorityLabel(priority: string): string {

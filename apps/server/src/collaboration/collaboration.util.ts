@@ -54,6 +54,7 @@ import {
   TabLabel,
   TabPanel,
   PlaneTaskList,
+  PlaneRoadmap,
   TableOfContentsBlock,
 } from '@docmost/editor-ext';
 import {
@@ -140,6 +141,7 @@ export const tiptapExtensions = [
   Footnote,
   FootnoteReference,
   PlaneTaskList,
+  PlaneRoadmap,
   TableOfContentsBlock,
 ] as any;
 

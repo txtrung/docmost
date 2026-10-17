@@ -3,6 +3,9 @@ import { uploadVideoAction } from "@/features/editor/components/video/upload-vid
 import { uploadAttachmentAction } from "../attachment/upload-attachment-action";
 import { uploadPdfAction } from "../pdf/upload-pdf-action";
 import { createMentionAction } from "@/features/editor/components/link/internal-link-paste.ts";
+import PlanePasteOffer from "@/features/editor/components/plane-task-list/plane-paste-offer";
+import i18n from "@/i18n";
+import { modals } from "@mantine/modals";
 import { INTERNAL_LINK_REGEX } from "@/lib/constants.ts";
 import { Editor } from "@tiptap/core";
 import {
@@ -21,6 +24,22 @@ const ATTACHMENT_NODE_TYPES = [
 ];
 
 const ATTACHMENT_URL_RE = /\/api\/files\/([0-9a-f-]+)\//;
+
+function openPlanePasteOffer(editor: Editor, url: string, pos: number) {
+  const modalId = "plane-paste";
+  modals.open({
+    modalId,
+    title: i18n.t("Plane link"),
+    children: (
+      <PlanePasteOffer
+        editor={editor}
+        url={url}
+        pos={pos}
+        onClose={() => modals.close(modalId)}
+      />
+    ),
+  });
+}
 
 export const handlePaste = (
   editor: Editor,
@@ -54,6 +73,18 @@ export const handlePaste = (
       creatorId,
       anchorId,
     );
+    return true;
+  }
+
+  const pastedUrl = clipboardData.trim();
+  if (
+    editor.isEditable &&
+    editor.state.selection.empty &&
+    /^https?:\/\/\S+$/i.test(pastedUrl) &&
+    pastedUrl.includes("/projects/")
+  ) {
+    event.preventDefault();
+    openPlanePasteOffer(editor, pastedUrl, editor.state.selection.from);
     return true;
   }
 

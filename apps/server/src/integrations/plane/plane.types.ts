@@ -78,8 +78,9 @@ export type PlaneFilterInput = {
   dueFrom?: string;
   dueTo?: string;
   search?: string;
+  id?: string;
   sort?: string;
   limit?: number;
 };
 
-export type PlaneGanttGrouping = 'cycles' | 'modules' | 'workItems';
+export type PlaneRoadmapGrouping = 'cycles' | 'modules' | 'workItems';

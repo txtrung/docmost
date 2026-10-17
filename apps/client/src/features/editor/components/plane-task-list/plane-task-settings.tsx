@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 import {
+  ActionIcon,
   Checkbox,
+  Group,
   NumberInput,
+  SegmentedControl,
   Select,
   Stack,
+  Text,
   TextInput,
 } from "@mantine/core";
+import { IconArrowDown, IconArrowUp } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import {
   getPlaneCycles,
@@ -24,6 +29,7 @@ import {
 } from "./plane-api";
 
 const COLUMN_LABEL: Record<(typeof PLANE_COLUMNS)[number], string> = {
+  key: "Key",
   title: "Title",
   state: "State",
   assignees: "Assignees",
@@ -32,12 +38,15 @@ const COLUMN_LABEL: Record<(typeof PLANE_COLUMNS)[number], string> = {
   labels: "Labels",
 };
 
+export type PlaneDisplayMode = "table" | "card" | "count";
+
 export type PlaneTaskSettingsValue = {
   projectId: string;
   filters: PlaneTaskFilters;
   columns: string[];
   sort: string;
   limit: number;
+  displayMode: PlaneDisplayMode;
 };
 
 type PlaneTaskSettingsProps = {
@@ -144,6 +153,22 @@ export default function PlaneTaskSettings({
 
   return (
     <Stack gap="xs">
+      <SegmentedControl
+        fullWidth
+        size="xs"
+        value={value.displayMode}
+        onChange={(next) =>
+          patch({
+            displayMode:
+              next === "card" || next === "count" ? next : "table",
+          })
+        }
+        data={[
+          { value: "table", label: t("Table") },
+          { value: "card", label: t("Card") },
+          { value: "count", label: t("Count") },
+        ]}
+      />
       <Select
         label={t("Project")}
         placeholder={t("Select a project")}
@@ -299,17 +324,79 @@ export default function PlaneTaskSettings({
           if (Number.isFinite(limit)) patch({ limit });
         }}
       />
-      <Checkbox.Group
-        label={t("Columns")}
-        value={value.columns}
-        onChange={(columns) => patch({ columns: columns.length ? columns : ["title"] })}
-      >
-        <Stack gap={4} mt={4}>
-          {PLANE_COLUMNS.map((column) => (
-            <Checkbox key={column} value={column} label={t(COLUMN_LABEL[column])} />
-          ))}
-        </Stack>
-      </Checkbox.Group>
+      <ColumnOrder
+        columns={value.columns}
+        onChange={(columns) => patch({ columns })}
+      />
+    </Stack>
+  );
+}
+
+function ColumnOrder({
+  columns,
+  onChange,
+}: {
+  columns: string[];
+  onChange: (columns: string[]) => void;
+}) {
+  const { t } = useTranslation();
+
+  function toggle(column: string) {
+    if (columns.includes(column)) {
+      const next = columns.filter((item) => item !== column);
+      onChange(next.length ? next : ["title"]);
+      return;
+    }
+    onChange([...columns, column]);
+  }
+
+  function move(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= columns.length) return;
+    const next = columns.slice();
+    const [item] = next.splice(index, 1);
+    next.splice(target, 0, item);
+    onChange(next);
+  }
+
+  return (
+    <Stack gap={4}>
+      <Text size="sm">{t("Columns")}</Text>
+      {PLANE_COLUMNS.map((column) => {
+        const index = columns.indexOf(column);
+        const checked = index >= 0;
+        return (
+          <Group key={column} gap="xs" wrap="nowrap" justify="space-between">
+            <Checkbox
+              checked={checked}
+              label={t(COLUMN_LABEL[column])}
+              onChange={() => toggle(column)}
+            />
+            {checked && (
+              <Group gap={2} wrap="nowrap">
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  aria-label={t("Move column up")}
+                  disabled={index === 0}
+                  onClick={() => move(index, -1)}
+                >
+                  <IconArrowUp size={14} />
+                </ActionIcon>
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  aria-label={t("Move column down")}
+                  disabled={index === columns.length - 1}
+                  onClick={() => move(index, 1)}
+                >
+                  <IconArrowDown size={14} />
+                </ActionIcon>
+              </Group>
+            )}
+          </Group>
+        );
+      })}
     </Stack>
   );
 }

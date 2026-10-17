@@ -12,6 +12,7 @@ export interface PlaneTaskListAttributes {
   columns?: string;
   sort?: string;
   limit?: number;
+  displayMode?: "table" | "card" | "count";
 }
 
 declare module "@tiptap/core" {
@@ -82,6 +83,19 @@ export const PlaneTaskList = Node.create<PlaneTaskListOptions>({
         },
         renderHTML: (attributes: PlaneTaskListAttributes) => ({
           "data-limit": String(attributes.limit || 50),
+        }),
+      },
+      displayMode: {
+        default: "table",
+        parseHTML: (element: HTMLElement) => {
+          const value = element.getAttribute("data-display");
+          return value === "card" || value === "count" ? value : "table";
+        },
+        renderHTML: (attributes: PlaneTaskListAttributes) => ({
+          "data-display":
+            attributes.displayMode === "card" || attributes.displayMode === "count"
+              ? attributes.displayMode
+              : "table",
         }),
       },
     };

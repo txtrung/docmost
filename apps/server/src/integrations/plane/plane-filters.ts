@@ -13,6 +13,7 @@ const STRING_FIELDS = [
   'dueFrom',
   'dueTo',
   'search',
+  'id',
   'sort',
 ] as const;
 
@@ -94,6 +95,7 @@ function matchesAssignee(
 }
 
 function matches(item: NormalizedPlaneTask, filters: PlaneFilterInput, email: string): boolean {
+  if (filters.id && !same(item.id, filters.id)) return false;
   if (filters.state && !same(item.stateId, filters.state) && !same(item.stateName, filters.state)) {
     return false;
   }

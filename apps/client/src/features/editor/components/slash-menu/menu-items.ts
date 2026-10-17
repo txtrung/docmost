@@ -65,9 +65,6 @@ import {
   YoutubeIcon,
 } from "@/components/icons";
 import { insertBaseEmbedBlock } from "@/features/editor/components/base-embed/insert-base-embed";
-import { createElement } from "react";
-import { modals } from "@mantine/modals";
-import PlaneRoadmapForm from "@/features/editor/components/plane-roadmap/plane-roadmap-form";
 
 const CommandGroups: SlashMenuGroupedItemsType = {
   basic: [
@@ -593,24 +590,12 @@ const CommandGroups: SlashMenuGroupedItemsType = {
       },
     },
     {
-      title: "Plane roadmap (Mermaid)",
-      description: "Insert a Mermaid Gantt chart from Plane.",
-      searchTerms: ["plane", "roadmap", "gantt", "mermaid", "timeline"],
+      title: "Plane roadmap",
+      description: "Insert an editable timeline from Plane.",
+      searchTerms: ["plane", "roadmap", "gantt", "timeline"],
       icon: IconTimeline,
       command: ({ editor, range }: CommandProps) => {
-        if (!editor) return;
-        editor.chain().focus().deleteRange(range).run();
-        const insertAt = editor.state.selection.from;
-        const modalId = "plane-roadmap";
-        modals.open({
-          modalId,
-          title: i18n.t("Plane roadmap (Mermaid)"),
-          children: createElement(PlaneRoadmapForm, {
-            editor,
-            insertAt,
-            onClose: () => modals.close(modalId),
-          }),
-        });
+        editor.chain().focus().deleteRange(range).insertPlaneRoadmap().run();
       },
     },
     {

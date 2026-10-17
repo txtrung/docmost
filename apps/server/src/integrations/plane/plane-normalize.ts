@@ -7,7 +7,11 @@ import {
   PlaneProject,
   PlaneState,
 } from './plane.types';
-import { isoDate } from './plane-gantt';
+function isoDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+  return match ? match[1] : null;
+}
 
 function asRecord(value: unknown): Record<string, any> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;

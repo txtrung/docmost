@@ -3,7 +3,12 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User } from '@docmost/db/types/entity.types';
 import { PlaneService } from './plane.service';
-import { PlaneProjectDto, PlaneRoadmapDto, PlaneWorkItemsDto } from './plane.dto';
+import {
+  PlaneParseUrlDto,
+  PlaneProjectDto,
+  PlaneRoadmapDto,
+  PlaneWorkItemsDto,
+} from './plane.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('plane')
@@ -83,15 +88,26 @@ export class PlaneController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('parse-url')
+  async parseUrl(@AuthUser() user: User, @Body() dto: PlaneParseUrlDto) {
+    if (!this.planeService.isConfigured()) {
+      return { configured: false, projectId: null, workItemId: null };
+    }
+    const result = await this.planeService.parseUrl(user.email, dto.url);
+    return { configured: true, ...result };
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('roadmap')
   async roadmap(@AuthUser() user: User, @Body() dto: PlaneRoadmapDto) {
     if (!this.planeService.isConfigured()) {
-      return { configured: false, mermaid: '', taskCount: 0 };
+      return { configured: false, model: null };
     }
     const result = await this.planeService.buildRoadmap(
       user.email,
       dto.projectId,
       dto.grouping,
+      dto.current,
     );
     return { configured: true, ...result };
   }

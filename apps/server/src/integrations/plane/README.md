@@ -1,8 +1,8 @@
 # Plane Community integration
 
-Docmost can read work items from a self-hosted [Plane Community Edition](https://plane.so) instance and show them in the editor. This module talks to Plane's REST API. It does not use Plane Query Language (PQL), which is an Enterprise feature.
+Docmost reads work items from a self-hosted Plane Community instance and shows them in the editor. The module uses Plane's REST API. It does not use Plane Query Language.
 
-The integration is disabled until all three environment variables are set. Docmost still starts without them.
+The integration stays off until all three environment variables are set. Docmost still starts without them.
 
 ## Environment
 
@@ -12,45 +12,54 @@ PLANE_WORKSPACE_SLUG=acme
 PLANE_API_KEY=plane_api_...
 ```
 
-- `PLANE_API_URL` is the Plane origin. The client calls `${PLANE_API_URL}/api/v1/`. A value that already ends in `/api/v1` is also accepted.
-- `PLANE_WORKSPACE_SLUG` is the workspace slug from the Plane URL (`https://plane.example.com/<slug>/...`).
-- `PLANE_API_KEY` is a Plane API token. It stays on the server. The browser never receives it.
+`PLANE_API_URL` is the Plane origin. Docmost calls `${PLANE_API_URL}/api/v1/`. A value that already ends in `/api/v1` is accepted.
 
-If Plane is on a private network, allow that network with the existing `ALLOWED_PRIVATE_NETWORKS` setting. The default `none` blocks private and loopback addresses.
+`PLANE_WORKSPACE_SLUG` is the workspace slug in the Plane URL.
 
-Issue links in the task table use the same origin as `PLANE_API_URL` (`/<slug>/projects/<projectId>/issues/<id>`). If the web UI is hosted on a different origin than the API, those links will not match the UI.
+`PLANE_API_KEY` is a Plane API token. It stays on the server.
 
-## Create an API key
+If Plane is on a private network, allow that network with `ALLOWED_PRIVATE_NETWORKS`. The default `none` blocks private and loopback addresses.
 
-1. Sign in to Plane Community as a user who can see the projects you want Docmost to read.
-2. Open account settings (avatar menu) and create an API token.
-3. Copy the token into `PLANE_API_KEY`.
+Issue links use the same origin as `PLANE_API_URL`.
 
-The token can see whatever that Plane user can see. Prefer a dedicated integration user over a personal admin token.
+## API token
+
+Create the token in Plane from a user who can see the projects Docmost should read. Put it in `PLANE_API_KEY`. The token can see whatever that user can see. A dedicated integration user is safer than a personal admin token.
 
 ## Permission model
 
-People sign in to Docmost with the same identity provider as Plane (for example Keycloak), so the Docmost email and the Plane email are the same address.
+People sign in to Docmost with the same identity provider as Plane, so the email addresses match.
 
-Every Plane request is made with the server API key. Before returning data, Docmost loads each project's members and keeps the project only when the signed-in Docmost user's email is one of those members. A user who is not a member gets no projects and a "no access" response for a direct project id. The API key is not filtered by itself; the membership check is what limits the response.
+Every Plane request uses the server API key. Docmost then keeps a project only when the signed-in user's email is a project member. Anyone else gets no projects and a no-access response for a direct project id.
 
-## What is cached
+## Cache
 
-Plane responses are cached in the existing Redis cache for 60 seconds. The work-item collection (`work-items`, or `issues` on older Plane versions) is remembered for 10 minutes. A `429` is retried once, waiting for the `Retry-After` header (capped at 60 seconds). Plane's published limit is 60 requests per minute per key.
+Plane responses sit in Redis for 60 seconds. The work-item collection name (`work-items`, or `issues` on older Plane) is remembered for 10 minutes. A `429` is retried once, using `Retry-After` and capped at 60 seconds.
 
-Lists are paged with `cursor` and `per_page` (100). At most 10 pages (1000 records) are read per resource before filters run.
+Lists page with `cursor` and `per_page` of 100. Docmost reads at most 10 pages (1000 records) per resource before filters run.
 
 ## Editor
 
-- **Plane tasks** inserts a read-only `planeTaskList` block. It lists the current user's projects and renders a live table.
-- **Plane roadmap (Mermaid)** inserts a Mermaid `gantt` code block. That diagram is a snapshot. The first line is a `%% docmost-plane` comment. While editing, the code block toolbar shows **Regenerate**, which fetches Plane again and replaces the diagram.
-- **Table of contents** inserts a live outline of the page headings. It is not a Plane feature.
+**Table of contents** inserts a live outline of the page headings. The settings choose the minimum and maximum heading level, a list or a one-line layout, numbering, and a pinned outline on the side of the page. A click scrolls to the heading.
+
+**Plane tasks** inserts a `planeTaskList` block. A modal sets the project, filters, column order, and a table, card, or count layout. Pasting a Plane project or work-item URL from the same origin offers to insert the block. A card layout shows one work item. The footer shows the match count and the local time of the last refresh.
+
+**Plane roadmap** inserts a `planeRoadmap` timeline. Sync from Plane fills lanes from modules, cycles, or dated work items. Bars and milestones can be dragged, renamed, recolored, added, and removed. Each item is `plane` or `manual`. Sync refreshes Plane items and keeps manual items, edited Plane items, and deletions. Viewers get the same timeline without those controls. Zoom can be weeks, months, or quarters.
+
+An older page may still contain a Mermaid gantt snapshot. That diagram still renders. It no longer has a regenerate action.
 
 ## Limitations
 
-- Read-only. Docmost does not create or edit Plane work items.
-- Community REST only. No PQL, no Plane Enterprise-only endpoints.
-- Filters run in Docmost after the cached page of work items is loaded, so they only see the first 1000 items.
-- The first uncached project list requests members for every project the API key can see. A large workspace can spend the rate limit on that first load; later loads use the 60 second cache.
-- Static HTML and Markdown export keep the node, but they do not expand live Plane rows or a live table of contents.
-- The roadmap diagram does not update until someone regenerates it.
+Docmost does not create or edit Plane work items.
+
+Filters and the roadmap only see the first 1000 work items in the cached list.
+
+A work item in several modules is drawn in the first module.
+
+The roadmap is one JSON attribute. Two people editing it at once keep the last write.
+
+Pinned tables of contents share one fixed panel, so two pinned blocks overlap.
+
+Static HTML and Markdown export keep the node and do not expand live Plane rows or a live table of contents.
+
+The first uncached project list asks Plane for members of every project the API key can see.

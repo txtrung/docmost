@@ -7,8 +7,6 @@ import classes from "./code-block.module.css";
 import React from "react";
 import { Suspense } from "react";
 import { useTranslation } from "react-i18next";
-import PlaneRoadmapRegenerateButton from "@/features/editor/components/plane-roadmap/plane-roadmap-regenerate";
-
 const MermaidView = React.lazy(
   () => import("@/features/editor/components/code-block/mermaid-view.tsx"),
 );
@@ -82,13 +80,6 @@ export default function CodeBlockView(props: NodeViewProps) {
             </Tooltip>
           )}
         </CopyButton>
-        {language === "mermaid" && (
-          <PlaneRoadmapRegenerateButton
-            node={node}
-            editor={editor}
-            getPos={getPos}
-          />
-        )}
       </Group>
 
       <pre

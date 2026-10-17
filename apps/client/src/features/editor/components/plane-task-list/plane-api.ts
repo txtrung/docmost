@@ -1,4 +1,5 @@
 import api from "@/lib/api-client";
+import type { RoadmapModel } from "@docmost/editor-ext";
 
 export type PlaneProject = {
   id: string;
@@ -72,6 +73,7 @@ export type PlaneTaskFilters = {
   dueFrom?: string;
   dueTo?: string;
   search?: string;
+  id?: string;
 };
 
 export type PlaneGrouping = "cycles" | "modules" | "workItems";
@@ -117,10 +119,21 @@ export function getPlaneMembers(projectId: string) {
   return post<Configured<{ items: PlanePerson[] }>>("/plane/members", { projectId });
 }
 
-export function getPlaneRoadmap(projectId: string, grouping: PlaneGrouping) {
-  return post<Configured<{ mermaid: string; taskCount: number }>>("/plane/roadmap", {
+export function parsePlaneUrl(url: string) {
+  return post<
+    Configured<{ projectId: string | null; workItemId: string | null }>
+  >("/plane/parse-url", { url });
+}
+
+export function getPlaneRoadmap(
+  projectId: string,
+  grouping: PlaneGrouping,
+  current?: RoadmapModel,
+) {
+  return post<Configured<{ model: RoadmapModel | null }>>("/plane/roadmap", {
     projectId,
     grouping,
+    current: current ? JSON.stringify(current) : undefined,
   });
 }
 
@@ -135,6 +148,7 @@ export function parsePlaneFilters(raw: string): PlaneTaskFilters {
 }
 
 export const PLANE_COLUMNS = [
+  "key",
   "title",
   "state",
   "assignees",

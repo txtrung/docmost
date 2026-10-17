@@ -1,0 +1,592 @@
+import { useEffect, useState } from "react";
+import { NodeViewProps, NodeViewWrapper, useEditorState } from "@tiptap/react";
+import {
+  ActionIcon,
+  Button,
+  Group,
+  Popover,
+  SegmentedControl,
+  Select,
+  Text,
+  TextInput,
+  Tooltip,
+} from "@mantine/core";
+import { IconPlus, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { useTranslation } from "react-i18next";
+import {
+  ROADMAP_COLORS,
+  addDays,
+  addLane,
+  addManualBar,
+  daysBetween,
+  emptyRoadmap,
+  parseRoadmapModel,
+  removeBar,
+  removeLane,
+  setZoom,
+  updateBar,
+  updateLane,
+  type RoadmapBar,
+  type RoadmapGrouping,
+  type RoadmapLane,
+  type RoadmapModel,
+  type RoadmapZoom,
+} from "@docmost/editor-ext";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { getPlaneProjects, getPlaneRoadmap, PlaneProject } from "../plane-task-list/plane-api";
+import classes from "./plane-roadmap.module.css";
+
+type DragEdge = "move" | "start" | "end";
+
+type DragState = {
+  id: string;
+  originX: number;
+  start: string;
+  end: string;
+  nextStart: string;
+  nextEnd: string;
+  edge: DragEdge;
+  moved: boolean;
+};
+
+function readModel(raw: string, projectId: string, grouping: RoadmapGrouping): RoadmapModel {
+  try {
+    return parseRoadmapModel(JSON.parse(raw || "{}")) ?? emptyRoadmap(projectId, grouping);
+  } catch {
+    return emptyRoadmap(projectId, grouping);
+  }
+}
+
+function groupingOf(value: unknown): RoadmapGrouping {
+  return value === "cycles" || value === "workItems" ? value : "modules";
+}
+
+function dayWidth(zoom: RoadmapZoom): number {
+  if (zoom === "weeks") return 16;
+  if (zoom === "quarters") return 1.6;
+  return 4;
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function rangeOf(model: RoadmapModel) {
+  const today = todayIso();
+  const dates = [today, ...model.bars.flatMap((bar) => [bar.start, bar.end])].sort();
+  const start = `${dates[0].slice(0, 8)}01`;
+  const endMonth = new Date(`${dates[dates.length - 1].slice(0, 8)}01T00:00:00Z`);
+  endMonth.setUTCMonth(endMonth.getUTCMonth() + 1);
+  endMonth.setUTCDate(0);
+  return { start, end: endMonth.toISOString().slice(0, 10), today };
+}
+
+function ticksFor(start: string, end: string, zoom: RoadmapZoom, width: number) {
+  const ticks: { label: string; x: number }[] = [];
+  if (zoom === "weeks") {
+    let cursor = start;
+    for (let count = 0; cursor <= end && count < 90; count += 1) {
+      ticks.push({ label: cursor.slice(5), x: daysBetween(start, cursor) * width });
+      cursor = addDays(cursor, 7);
+    }
+    return ticks;
+  }
+  let cursor = `${start.slice(0, 8)}01`;
+  for (let count = 0; cursor <= end && count < 48; count += 1) {
+    const month = Number(cursor.slice(5, 7));
+    if (zoom === "months" || month % 3 === 1) {
+      const quarter = Math.floor((month - 1) / 3) + 1;
+      ticks.push({
+        label: zoom === "quarters" ? `Q${quarter} ${cursor.slice(0, 4)}` : cursor.slice(0, 7),
+        x: Math.max(0, daysBetween(start, cursor) * width),
+      });
+    }
+    const date = new Date(`${cursor}T00:00:00Z`);
+    date.setUTCMonth(date.getUTCMonth() + 1);
+    cursor = date.toISOString().slice(0, 10);
+  }
+  return ticks;
+}
+
+function laneLabel(lane: RoadmapLane, t: (key: string) => string): string {
+  if (!lane.overridden && lane.planeId === "unassigned") return t("Unassigned");
+  if (!lane.overridden && lane.planeId === "work-items") return t("Work items");
+  return lane.title;
+}
+
+export default function PlaneRoadmapView(props: NodeViewProps) {
+  const { node, updateAttributes, editor } = props;
+  const { t } = useTranslation();
+  const isEditable = useEditorState({
+    editor,
+    selector: (ctx) => ctx.editor.isEditable,
+  });
+  const projectId = String(node.attrs.projectId || "");
+  const grouping = groupingOf(node.attrs.grouping);
+  const model = readModel(String(node.attrs.data || "{}"), projectId, grouping);
+  const [projects, setProjects] = useState<PlaneProject[]>([]);
+  const [configured, setConfigured] = useState(true);
+  const [error, setError] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [viewerZoom, setViewerZoom] = useState<RoadmapZoom>(model.zoom);
+  const [preview, setPreview] = useState<{ id: string; start: string; end: string } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const zoom = isEditable ? model.zoom : viewerZoom;
+
+  useEffect(() => {
+    let active = true;
+    getPlaneProjects()
+      .then((result) => {
+        if (!active) return;
+        setConfigured(result.configured);
+        setProjects(result.projects);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setError(getApiErrorMessage(err, t("Failed to load the roadmap.")));
+      });
+    return () => {
+      active = false;
+    };
+  }, [t]);
+
+  function commit(next: RoadmapModel) {
+    updateAttributes({
+      projectId: next.projectId,
+      grouping: next.grouping,
+      data: JSON.stringify(next),
+    });
+  }
+
+  function sync(nextProjectId = model.projectId, nextGrouping = model.grouping) {
+    if (!nextProjectId) return;
+    setSyncing(true);
+    setError("");
+    const current = { ...model, projectId: nextProjectId, grouping: nextGrouping };
+    getPlaneRoadmap(nextProjectId, nextGrouping, current)
+      .then((result) => {
+        setConfigured(result.configured);
+        if (!result.configured || !result.model) {
+          setError(t("Plane is not configured."));
+          return;
+        }
+        commit(result.model);
+      })
+      .catch((err) => {
+        setError(getApiErrorMessage(err, t("Failed to load the roadmap.")));
+      })
+      .finally(() => setSyncing(false));
+  }
+
+  const range = rangeOf(model);
+  const width = dayWidth(zoom);
+  const span = Math.max(1, daysBetween(range.start, range.end));
+  const trackWidth = span * width;
+  const ticks = ticksFor(range.start, range.end, zoom, width);
+  const todayX = daysBetween(range.start, range.today) * width;
+
+  return (
+    <NodeViewWrapper data-drag-handle>
+      <div contentEditable={false}>
+        <Group justify="space-between" mb="xs" wrap="wrap">
+          <Text fw={600} size="sm">
+            {t("Plane roadmap")}
+          </Text>
+          <Group gap="xs" wrap="wrap">
+            <SegmentedControl
+              size="xs"
+              value={zoom}
+              onChange={(value) => {
+                const next: RoadmapZoom =
+                  value === "weeks" || value === "quarters" ? value : "months";
+                if (isEditable) commit(setZoom(model, next));
+                else setViewerZoom(next);
+              }}
+              data={[
+                { value: "weeks", label: t("Weeks") },
+                { value: "months", label: t("Months") },
+                { value: "quarters", label: t("Quarters") },
+              ]}
+            />
+            {isEditable && (
+              <Tooltip label={t("Sync from Plane")}>
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  leftSection={<IconRefresh size={14} />}
+                  loading={syncing}
+                  disabled={!model.projectId}
+                  onClick={() => sync()}
+                >
+                  {t("Sync from Plane")}
+                </Button>
+              </Tooltip>
+            )}
+          </Group>
+        </Group>
+
+        {isEditable && (
+          <Group mb="xs" grow align="flex-end">
+            <Select
+              label={t("Project")}
+              placeholder={t("Select a project")}
+              data={projects.map((project) => ({
+                value: project.id,
+                label: project.identifier
+                  ? `${project.name} (${project.identifier})`
+                  : project.name,
+              }))}
+              value={model.projectId || null}
+              onChange={(value) => {
+                const nextId = value ? String(value) : "";
+                if (nextId === model.projectId) return;
+                commit({ ...emptyRoadmap(nextId, model.grouping), zoom: model.zoom });
+              }}
+              allowDeselect={false}
+              nothingFoundMessage={t("No projects")}
+            />
+            <Select
+              label={t("Grouping")}
+              data={[
+                { value: "modules", label: t("Modules") },
+                { value: "cycles", label: t("Cycles") },
+                { value: "workItems", label: t("Work items") },
+              ]}
+              value={model.grouping}
+              onChange={(value) =>
+                commit({ ...model, grouping: groupingOf(value) })
+              }
+              allowDeselect={false}
+            />
+          </Group>
+        )}
+
+        {!configured && <Text size="sm">{t("Plane is not configured.")}</Text>}
+        {error && (
+          <Text size="sm" c="red" mb="xs">
+            {error}
+          </Text>
+        )}
+        {!model.projectId && (
+          <Text size="sm">
+            {isEditable ? t("Select a project") : t("This roadmap is not set up.")}
+          </Text>
+        )}
+
+        {model.projectId && (
+          <>
+            {isEditable && (
+              <Group mb="xs" gap="xs">
+                <Button
+                  size="compact-xs"
+                  variant="default"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={() => commit(addLane(model, t("Lane")))}
+                >
+                  {t("Add lane")}
+                </Button>
+                <Button
+                  size="compact-xs"
+                  variant="default"
+                  disabled={!model.lanes.length}
+                  onClick={() => {
+                    const laneId = model.lanes[0]?.id;
+                    if (!laneId) return;
+                    const start = todayIso();
+                    commit(addManualBar(model, laneId, t("Bar"), start, addDays(start, 14)));
+                  }}
+                >
+                  {t("Add bar")}
+                </Button>
+                <Button
+                  size="compact-xs"
+                  variant="default"
+                  disabled={!model.lanes.length}
+                  onClick={() => {
+                    const laneId = model.lanes[0]?.id;
+                    if (!laneId) return;
+                    const start = todayIso();
+                    commit(addManualBar(model, laneId, t("Milestone"), start, start));
+                  }}
+                >
+                  {t("Add milestone")}
+                </Button>
+              </Group>
+            )}
+            {!model.lanes.length && (
+              <Text size="sm" mb="xs">
+                {t("No lanes yet.")}
+              </Text>
+            )}
+            <div className={classes.scroll}>
+              <div className={classes.grid} style={{ width: 180 + trackWidth }}>
+                <div />
+                <div className={classes.track} style={{ height: 22 }}>
+                  {ticks.map((tick) => (
+                    <span key={`${tick.label}-${tick.x}`} className={classes.tick} style={{ left: tick.x }}>
+                      {tick.label}
+                    </span>
+                  ))}
+                </div>
+                {model.lanes.map((lane) => (
+                  <LaneRow
+                    key={lane.id}
+                    lane={lane}
+                    model={model}
+                    editable={Boolean(isEditable)}
+                    trackWidth={trackWidth}
+                    dayWidth={width}
+                    rangeStart={range.start}
+                    todayX={todayX}
+                    preview={preview}
+                    editingId={editingId}
+                    onCommit={commit}
+                    onPreview={setPreview}
+                    onEdit={setEditingId}
+                    t={t}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </NodeViewWrapper>
+  );
+}
+
+function LaneRow({
+  lane,
+  model,
+  editable,
+  trackWidth,
+  dayWidth,
+  rangeStart,
+  todayX,
+  preview,
+  editingId,
+  onCommit,
+  onPreview,
+  onEdit,
+  t,
+}: {
+  lane: RoadmapLane;
+  model: RoadmapModel;
+  editable: boolean;
+  trackWidth: number;
+  dayWidth: number;
+  rangeStart: string;
+  todayX: number;
+  preview: { id: string; start: string; end: string } | null;
+  editingId: string | null;
+  onCommit: (next: RoadmapModel) => void;
+  onPreview: (preview: { id: string; start: string; end: string } | null) => void;
+  onEdit: (id: string | null) => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const bars = model.bars.filter((bar) => bar.laneId === lane.id);
+  return (
+    <>
+      <div className={classes.laneLabel}>
+        {editable ? (
+          <input
+            key={`${lane.id}:${lane.title}`}
+            className={classes.laneInput}
+            defaultValue={lane.title}
+            aria-label={t("Lane")}
+            onBlur={(event) => {
+              const title = event.currentTarget.value.trim();
+              if (title && title !== lane.title) onCommit(updateLane(model, lane.id, title));
+            }}
+          />
+        ) : (
+          <Text size="sm" truncate>
+            {laneLabel(lane, t)}
+          </Text>
+        )}
+        {editable && (
+          <ActionIcon
+            size="sm"
+            variant="subtle"
+            color="gray"
+            aria-label={t("Delete")}
+            onClick={() => onCommit(removeLane(model, lane.id))}
+          >
+            <IconTrash size={14} />
+          </ActionIcon>
+        )}
+      </div>
+      <div className={classes.track} style={{ width: trackWidth }}>
+        <div className={classes.today} style={{ left: todayX }} title={t("Today")} />
+        {bars.map((bar) => (
+          <RoadmapBarView
+            key={bar.id}
+            bar={preview?.id === bar.id ? { ...bar, start: preview.start, end: preview.end } : bar}
+            model={model}
+            editable={editable}
+            dayWidth={dayWidth}
+            rangeStart={rangeStart}
+            editing={editingId === bar.id}
+            onCommit={onCommit}
+            onPreview={onPreview}
+            onEdit={onEdit}
+            t={t}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function RoadmapBarView({
+  bar,
+  model,
+  editable,
+  dayWidth,
+  rangeStart,
+  editing,
+  onCommit,
+  onPreview,
+  onEdit,
+  t,
+}: {
+  bar: RoadmapBar;
+  model: RoadmapModel;
+  editable: boolean;
+  dayWidth: number;
+  rangeStart: string;
+  editing: boolean;
+  onCommit: (next: RoadmapModel) => void;
+  onPreview: (preview: { id: string; start: string; end: string } | null) => void;
+  onEdit: (id: string | null) => void;
+  t: (key: string) => string;
+}) {
+  const left = daysBetween(rangeStart, bar.start) * dayWidth;
+  const barWidth = Math.max(bar.kind === "milestone" ? 14 : 12, daysBetween(bar.start, bar.end) * dayWidth);
+
+  function begin(event: React.PointerEvent, edge: DragEdge) {
+    if (!editable) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const drag: DragState = {
+      id: bar.id,
+      originX: event.clientX,
+      start: bar.start,
+      end: bar.end,
+      nextStart: bar.start,
+      nextEnd: bar.end,
+      edge,
+      moved: false,
+    };
+    const onMove = (pointer: PointerEvent) => {
+      const delta = Math.round((pointer.clientX - drag.originX) / dayWidth);
+      if (delta !== 0) drag.moved = true;
+      let start = drag.start;
+      let end = drag.end;
+      if (drag.edge === "move") {
+        start = addDays(drag.start, delta);
+        end = addDays(drag.end, delta);
+      } else if (drag.edge === "start") {
+        start = addDays(drag.start, delta);
+        if (start > end) start = end;
+      } else {
+        end = addDays(drag.end, delta);
+        if (end < start) end = start;
+      }
+      drag.nextStart = start;
+      drag.nextEnd = end;
+      onPreview({ id: drag.id, start, end });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      onPreview(null);
+      if (!drag.moved) {
+        onEdit(drag.id);
+        return;
+      }
+      onCommit(updateBar(model, drag.id, { start: drag.nextStart, end: drag.nextEnd }));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
+  const control = (
+    <button
+      type="button"
+      className={bar.kind === "milestone" ? classes.milestone : classes.bar}
+      style={{
+        left,
+        width: bar.kind === "milestone" ? 14 : barWidth,
+        background: bar.color,
+        cursor: editable ? "grab" : "default",
+      }}
+      title={bar.title}
+      onPointerDown={(event) => begin(event, "move")}
+    >
+      {bar.kind === "bar" ? bar.title : ""}
+      {editable && bar.kind === "bar" && (
+        <>
+          <span
+            className={classes.handle}
+            style={{ left: 0 }}
+            onPointerDown={(event) => begin(event, "start")}
+          />
+          <span
+            className={classes.handle}
+            style={{ right: 0 }}
+            onPointerDown={(event) => begin(event, "end")}
+          />
+        </>
+      )}
+    </button>
+  );
+
+  if (!editable) return control;
+
+  return (
+    <Popover
+      opened={editing}
+      onChange={(opened) => onEdit(opened ? bar.id : null)}
+      position="bottom"
+      withArrow
+    >
+      <Popover.Target>{control}</Popover.Target>
+      <Popover.Dropdown>
+        <TextInput
+          label={t("Title")}
+          defaultValue={bar.title}
+          key={`${bar.id}:${bar.title}`}
+          mb="xs"
+          onBlur={(event) => {
+            const title = event.currentTarget.value.trim();
+            if (title && title !== bar.title) onCommit(updateBar(model, bar.id, { title }));
+          }}
+        />
+        <Group gap={4} mb="xs">
+          {ROADMAP_COLORS.map((color) => (
+            <ActionIcon
+              key={color}
+              size="sm"
+              variant={color === bar.color ? "filled" : "default"}
+              aria-label={t("Color")}
+              style={{ background: color }}
+              onClick={() => onCommit(updateBar(model, bar.id, { color }))}
+            />
+          ))}
+        </Group>
+        <Button
+          size="compact-xs"
+          color="red"
+          variant="light"
+          onClick={() => {
+            onEdit(null);
+            onCommit(removeBar(model, bar.id));
+          }}
+        >
+          {t("Delete")}
+        </Button>
+      </Popover.Dropdown>
+    </Popover>
+  );
+}
